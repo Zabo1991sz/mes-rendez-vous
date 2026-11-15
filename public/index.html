@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#1E5BB8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Mes rendez-vous</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Écran de veille : une pression pour déverrouiller -->
+  <section id="lock" class="lock" role="button" aria-label="Toucher pour voir les rendez-vous">
+    <div class="lock-greeting" id="lockGreeting">Bonjour</div>
+    <div class="lock-time" id="lockTime">--:--</div>
+    <div class="lock-date" id="lockDate"></div>
+    <div class="lock-next hidden" id="lockNext"></div>
+    <div class="lock-hint">👆 Touchez l'écran<br>pour voir vos rendez-vous</div>
+  </section>
+
+  <!-- Liste des rendez-vous -->
+  <section id="main" class="main hidden">
+    <header class="top">
+      <div>
+        <h1>Mes rendez-vous</h1>
+        <div class="today-label" id="todayLabel"></div>
+      </div>
+      <button class="btn-lock" id="lockBtn" type="button">🔒 Veille</button>
+    </header>
+    <div id="list"></div>
+    <button class="fab" id="addBtn" type="button" aria-label="Ajouter un rendez-vous">
+      <span class="fab-plus">+</span>
+      <span class="fab-label">Ajouter</span>
+    </button>
+  </section>
+
+  <!-- Dictée vocale -->
+  <section id="voice" class="overlay hidden">
+    <div class="overlay-inner">
+      <h2>Nouveau rendez-vous</h2>
+      <button class="mic" id="micBtn" type="button" aria-label="Parler">🎤</button>
+      <div class="status" id="voiceStatus">Touchez le micro pour parler.</div>
+      <div class="transcript" id="transcript"></div>
+      <div class="example">
+        Dites par exemple :<br>
+        <strong>« Rendez-vous chez le psy mardi 17 novembre à 10 heures »</strong>
+      </div>
+      <div id="textForm" class="text-form hidden">
+        <label for="textInput">Écrivez le rendez-vous :</label>
+        <textarea id="textInput" rows="3" placeholder="Rendez-vous chez le dentiste le 3 décembre à 14 h"></textarea>
+        <button class="btn btn-yes" id="textOk" type="button">Continuer ➜</button>
+      </div>
+      <button class="btn btn-secondary" id="typeBtn" type="button">⌨️ Écrire au clavier</button>
+      <button class="btn btn-secondary" id="voiceCancel" type="button">✕ Annuler</button>
+    </div>
+  </section>
+
+  <!-- Vérification avant enregistrement -->
+  <section id="verify" class="overlay hidden">
+    <div class="overlay-inner">
+      <h2>Est-ce bien correct ?</h2>
+      <div class="said" id="vSaid"></div>
+      <div class="summary">
+        <div class="summary-row">
+          <div class="ico">📅</div>
+          <div><div class="lbl">Date</div><div class="val" id="vDate"></div></div>
+        </div>
+        <div class="summary-row">
+          <div class="ico">🕙</div>
+          <div><div class="lbl">Heure</div><div class="val" id="vTime"></div></div>
+        </div>
+        <div class="summary-row">
+          <div class="ico">📝</div>
+          <div><div class="lbl">Rendez-vous</div><div class="val" id="vTitle"></div></div>
+        </div>
+      </div>
+      <div id="vWarnings"></div>
+
+      <div class="edit hidden" id="editBox">
+        <label for="eDate">Date</label>
+        <input type="date" id="eDate">
+        <label for="eTime">Heure</label>
+        <input type="time" id="eTime">
+        <label for="eTitle">Rendez-vous</label>
+        <input type="text" id="eTitle" autocomplete="off">
+      </div>
+
+      <button class="btn btn-yes" id="vSave" type="button">✓ Oui, enregistrer</button>
+      <button class="btn btn-edit" id="vEdit" type="button">✏️ Corriger</button>
+      <div class="row-btns">
+        <button class="btn btn-secondary" id="vRetry" type="button">🎤 Redire</button>
+        <button class="btn btn-secondary" id="vCancel" type="button">✕ Annuler</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Confirmation de suppression -->
+  <section id="confirm" class="overlay overlay-dim hidden">
+    <div class="confirm-box">
+      <div class="confirm-text" id="confirmText"></div>
+      <div class="confirm-detail" id="confirmDetail"></div>
+      <div class="row-btns">
+        <button class="btn btn-danger" id="confirmYes" type="button">Oui, supprimer</button>
+        <button class="btn btn-secondary" id="confirmNo" type="button">Non</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

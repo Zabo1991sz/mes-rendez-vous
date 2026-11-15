@@ -1,0 +1,10 @@
+{
+  "name": "mes-rendez-vous",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Application tablette simple pour noter et afficher ses rendez-vous à la voix",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/"
+  }
+}
