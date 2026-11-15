@@ -71,6 +71,26 @@
     </div>
   </section>
 
+  <!-- Note d'un rendez-vous -->
+  <section id="note" class="overlay hidden">
+    <div class="overlay-inner verify-layout">
+      <div class="verify-info">
+        <h2 id="noteTitle">Note</h2>
+        <div class="note-for" id="noteFor"></div>
+        <button class="mic mic-note" id="noteMic" type="button" aria-label="Dicter la note">🎤</button>
+        <div class="status" id="noteStatus"></div>
+        <textarea id="noteText" rows="5" placeholder="Ex. : apporter la carte Vitale et l'ordonnance"></textarea>
+      </div>
+      <div class="verify-actions">
+        <button class="btn btn-yes" id="noteSave" type="button">✓ Enregistrer la note</button>
+        <div class="row-btns">
+          <button class="btn btn-secondary hidden" id="noteDelete" type="button">🗑 Effacer la note</button>
+          <button class="btn btn-secondary" id="noteClose" type="button">✕ Fermer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Dictée vocale -->
   <section id="voice" class="overlay hidden">
     <div class="overlay-inner">

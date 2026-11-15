@@ -168,7 +168,12 @@
         ? '<div class="card-time">🕙 ' + esc(P.formatTime(a.time)) + '</div>'
         : '<div class="card-time muted">Heure non précisée</div>') +
       '<div class="card-title">' + esc(a.title) + '</div>' +
+      '<div class="card-actions">' +
+      (a.note
+        ? '<button class="btn-note has-note" type="button" data-note="' + esc(a.id) + '">📝 Voir la note</button>'
+        : '<button class="btn-note" type="button" data-note="' + esc(a.id) + '">＋ Ajouter une note</button>') +
       '<button class="btn-del" type="button" data-id="' + esc(a.id) + '">🗑 Supprimer</button>' +
+      '</div>' +
       '</article>';
   }
 
@@ -188,6 +193,8 @@
   }
 
   document.addEventListener('click', function (e) {
+    var noteBtn = e.target.closest ? e.target.closest('.btn-note') : null;
+    if (noteBtn) { openNote(noteBtn.getAttribute('data-note')); return; }
     var btn = e.target.closest ? e.target.closest('.btn-del') : null;
     if (!btn) return;
     var id = btn.getAttribute('data-id');
@@ -290,8 +297,8 @@
 
   // ---------- Fenêtres ----------
   // Ordre = ordre d'empilement. Les fenêtres « bloquantes » empêchent la mise en veille (saisie en cours).
-  var OVERLAYS = ['calendar', 'day', 'voice', 'verify', 'confirm'];
-  var BLOCKING = ['voice', 'verify', 'confirm'];
+  var OVERLAYS = ['calendar', 'day', 'note', 'voice', 'verify', 'confirm'];
+  var BLOCKING = ['note', 'voice', 'verify', 'confirm'];
   function showOverlay(id) { $(id).classList.remove('hidden'); $(id).scrollTop = 0; }
   function hideOverlay(id) { $(id).classList.add('hidden'); }
   function isOverlayOpen() { return BLOCKING.some(isOpen); }
@@ -301,19 +308,108 @@
     OVERLAYS.forEach(hideOverlay);
   }
 
-  var confirmYes = null;
-  function askConfirm(text, detailHtml, onYes) {
+  var confirmYes = null, confirmNo = null;
+  // opts : { yes: 'libellé', no: 'libellé', danger: true/false, onNo: fonction }
+  function askConfirm(text, detailHtml, onYes, opts) {
+    opts = opts || {};
     $('confirmText').textContent = text;
     $('confirmDetail').innerHTML = esc(detailHtml).replace(/&lt;br&gt;/g, '<br>');
+    $('confirmYes').textContent = opts.yes || 'Oui, supprimer';
+    $('confirmYes').className = 'btn ' + (opts.danger === false ? 'btn-yes' : 'btn-danger');
+    $('confirmNo').textContent = opts.no || 'Non';
     confirmYes = onYes;
+    confirmNo = opts.onNo || null;
     showOverlay('confirm');
   }
   $('confirmYes').addEventListener('click', function () {
     hideOverlay('confirm');
-    var fn = confirmYes; confirmYes = null;
+    var fn = confirmYes; confirmYes = confirmNo = null;
     if (fn) fn();
   });
-  $('confirmNo').addEventListener('click', function () { hideOverlay('confirm'); confirmYes = null; });
+  $('confirmNo').addEventListener('click', function () {
+    hideOverlay('confirm');
+    var fn = confirmNo; confirmYes = confirmNo = null;
+    if (fn) fn();
+  });
+
+  // ---------- Notes d'un rendez-vous ----------
+  var noteId = null, noteOriginal = '';
+
+  function findAppt(id) { return appts.filter(function (x) { return x.id === id; })[0]; }
+  function setNoteStatus(t) { $('noteStatus').textContent = t; }
+
+  function openNote(id) {
+    var a = findAppt(id);
+    if (!a) return;
+    noteId = id;
+    noteOriginal = a.note || '';
+    $('noteFor').textContent = a.title + ' — ' + P.formatDate(a.date) + (a.time ? ' à ' + P.formatTime(a.time) : '');
+    $('noteText').value = noteOriginal;
+    $('noteDelete').classList.toggle('hidden', !noteOriginal);
+    $('noteTitle').textContent = noteOriginal ? 'Note' : 'Ajouter une note';
+    showOverlay('note');
+    if (!Rec) setNoteStatus('Écrivez la note ci-dessous.');
+    else if (noteOriginal) setNoteStatus('Touchez le micro pour ajouter du texte à la note.');
+    else startNoteListening(); // nouvelle note : on écoute tout de suite
+  }
+
+  function startNoteListening() {
+    var before = $('noteText').value.replace(/\s+$/, '');
+    setNoteStatus('Un instant…');
+    listen({
+      onStart: function () {
+        $('noteMic').classList.add('listening');
+        setNoteStatus('Je vous écoute… Dites votre note.');
+      },
+      onText: function (t) { $('noteText').value = (before ? before + '\n' : '') + t; },
+      onDone: function (t) {
+        $('noteMic').classList.remove('listening');
+        var txt = t.charAt(0).toUpperCase() + t.slice(1);
+        $('noteText').value = (before ? before + '\n' : '') + txt;
+        setNoteStatus('Vérifiez la note, puis touchez « Enregistrer ».');
+      },
+      onError: function (code) {
+        $('noteMic').classList.remove('listening');
+        $('noteText').value = before;
+        setNoteStatus(micError(code, 'la note'));
+      }
+    });
+  }
+
+  function closeNote() { stopListening(); noteId = null; hideOverlay('note'); }
+
+  function saveNote() {
+    var a = findAppt(noteId);
+    if (!a) { closeNote(); return; }
+    var txt = $('noteText').value.trim();
+    if (txt) a.note = txt; else delete a.note;
+    if (!persist()) { toast("Erreur : la note n'a pas pu être enregistrée"); return; }
+    closeNote();
+    refreshViews();
+    toast(txt ? '✓ Note enregistrée' : 'Note effacée');
+  }
+
+  $('noteMic').addEventListener('click', function () {
+    if (!Rec) { setNoteStatus(micError('unsupported')); return; }
+    if (listening) { finishListening(); return; }
+    startNoteListening();
+  });
+  $('noteText').addEventListener('input', function () { if (listening) stopListening(); });
+  $('noteSave').addEventListener('click', saveNote);
+  $('noteDelete').addEventListener('click', function () {
+    stopListening();
+    askConfirm('Effacer la note ?', $('noteFor').textContent, function () {
+      $('noteText').value = '';
+      saveNote();
+    }, { yes: 'Oui, effacer' });
+  });
+  $('noteClose').addEventListener('click', function () {
+    stopListening();
+    var txt = $('noteText').value.trim();
+    if (txt === noteOriginal.trim()) { closeNote(); return; }
+    askConfirm('Enregistrer la note ?', 'La note a été modifiée.', saveNote,
+      { yes: '✓ Oui, enregistrer', no: 'Non, ne pas garder', danger: false, onNo: closeNote });
+  });
 
   var toastTimer = null;
   function toast(text) {
@@ -324,17 +420,75 @@
     toastTimer = setTimeout(function () { el.classList.remove('show'); }, 3000);
   }
 
-  // ---------- Dictée vocale ----------
-  var rec = null, listening = false, cancelled = false, heard = '', lastError = '';
+  // ---------- Reconnaissance vocale (commune aux rendez-vous et aux notes) ----------
+  var rec = null, listening = false, recSession = 0;
 
+  // h : { onStart(), onText(texte partiel), onDone(texte final), onError(code) }
+  function listen(h) {
+    stopListening();
+    stopSpeaking();
+    if (!Rec) { h.onError('unsupported'); return; }
+    var session = ++recSession, heard = '', lastError = '';
+    try { rec = new Rec(); } catch (e) { h.onError('unsupported'); return; }
+    rec.lang = 'fr-FR';
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    rec.onstart = function () {
+      if (session !== recSession) return;
+      listening = true;
+      h.onStart();
+    };
+    rec.onresult = function (e) {
+      if (session !== recSession) return;
+      var txt = '';
+      for (var i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      heard = txt;
+      h.onText(txt);
+    };
+    rec.onerror = function (e) { lastError = e.error || ''; };
+    rec.onend = function () {
+      if (session !== recSession) return; // écoute annulée entre-temps
+      listening = false;
+      rec = null;
+      var t = heard.trim();
+      if (t) h.onDone(t);
+      else h.onError(lastError || 'no-speech');
+    };
+    try { rec.start(); } catch (e) { h.onError('start'); }
+  }
+
+  // Arrête l'écoute et ignore ce qui a été entendu
+  function stopListening() {
+    recSession++;
+    if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
+    listening = false;
+    var mics = document.querySelectorAll('.mic');
+    for (var i = 0; i < mics.length; i++) mics[i].classList.remove('listening');
+  }
+
+  // Termine l'écoute en gardant ce qui a été entendu
+  function finishListening() { if (rec) { try { rec.stop(); } catch (e) {} } }
+
+  function micError(code, what) {
+    if (code === 'not-allowed' || code === 'service-not-allowed') {
+      return "Le micro n'est pas autorisé. Autorisez le micro pour cette application, ou écrivez " + what + '.';
+    }
+    if (code === 'network') return 'Pas de connexion Internet : la dictée ne marche pas. Vous pouvez écrire ' + what + '.';
+    if (code === 'unsupported') return "La dictée vocale n'est pas disponible sur cet appareil.";
+    if (code === 'start') return 'Touchez le micro pour parler.';
+    return "Je n'ai rien entendu. Touchez le micro et parlez.";
+  }
+
+  // ---------- Dictée d'un rendez-vous ----------
   function setStatus(t) { $('voiceStatus').textContent = t; }
   function setMic(on) { $('micBtn').classList.toggle('listening', on); }
+  function cancelListening() { stopListening(); }
 
   var voiceDate = null; // date imposée quand on ajoute depuis un jour du calendrier
 
   function openVoice(defaultDate) {
     stopSpeaking();
-    cancelled = false;
     voiceDate = typeof defaultDate === 'string' ? defaultDate : null;
     if (voiceDate) {
       $('voiceFor').textContent = 'Pour le ' + P.formatDate(voiceDate);
@@ -358,63 +512,18 @@
   }
 
   function startListening() {
-    if (!Rec || listening) return;
-    stopSpeaking();
-    heard = ''; lastError = '';
     $('transcript').textContent = '';
-    try {
-      rec = new Rec();
-    } catch (e) {
-      setStatus("La dictée vocale n'est pas disponible.");
-      showTextMode();
-      return;
-    }
-    rec.lang = 'fr-FR';
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.maxAlternatives = 1;
-
-    rec.onstart = function () {
-      listening = true;
-      setMic(true);
-      setStatus('Je vous écoute… Parlez maintenant.');
-    };
-    rec.onresult = function (e) {
-      var txt = '';
-      for (var i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-      heard = txt;
-      $('transcript').textContent = '« ' + txt + ' »';
-    };
-    rec.onerror = function (e) { lastError = e.error || ''; };
-    rec.onend = function () {
-      listening = false;
-      setMic(false);
-      rec = null;
-      if (cancelled) return;
-      var t = heard.trim();
-      if (t) { openVerify(t); return; }
-      if (lastError === 'not-allowed' || lastError === 'service-not-allowed') {
-        setStatus("Le micro n'est pas autorisé. Autorisez le micro pour cette application, ou écrivez le rendez-vous.");
-      } else if (lastError === 'network') {
-        setStatus("Pas de connexion Internet : la dictée ne marche pas. Vous pouvez écrire le rendez-vous.");
-      } else {
-        setStatus("Je n'ai rien entendu. Touchez le micro et parlez.");
+    setStatus('Un instant…');
+    listen({
+      onStart: function () { setMic(true); setStatus('Je vous écoute… Parlez maintenant.'); },
+      onText: function (t) { $('transcript').textContent = '« ' + t + ' »'; },
+      onDone: function (t) { setMic(false); openVerify(t); },
+      onError: function (code) {
+        setMic(false);
+        setStatus(micError(code, 'le rendez-vous'));
+        if (code === 'unsupported') showTextMode();
       }
-    };
-
-    try {
-      rec.start();
-      setStatus('Un instant…');
-    } catch (e) {
-      setStatus('Touchez le micro pour parler.');
-    }
-  }
-
-  function cancelListening() {
-    cancelled = true;
-    if (rec) { try { rec.abort(); } catch (e) {} }
-    listening = false;
-    setMic(false);
+    });
   }
 
   function showTextMode() {
@@ -426,8 +535,7 @@
 
   $('micBtn').addEventListener('click', function () {
     if (!Rec) return;
-    if (listening) { if (rec) rec.stop(); return; }
-    cancelled = false;
+    if (listening) { finishListening(); return; }
     startListening();
   });
   $('typeBtn').addEventListener('click', showTextMode);
