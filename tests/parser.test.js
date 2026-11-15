@@ -43,6 +43,13 @@ test('date absente : date nulle et avertissement', () => {
   assert.ok(r.warnings.length > 0);
 });
 
+test('date par défaut (ajout depuis le calendrier)', () => {
+  const r = P.parse('Psy à 10 heures', NOW, { defaultDate: '2026-11-24' });
+  assert.deepStrictEqual([r.date, r.time, r.title, r.warnings.length], ['2026-11-24', '10:00', 'Psy', 0]);
+  const r2 = P.parse('dentiste le 3 décembre à 9h', NOW, { defaultDate: '2026-11-24' });
+  assert.strictEqual(r2.date, '2026-12-03'); // la date dite l'emporte
+});
+
 test('date inexistante', () => {
   const r = P.parse('dentiste le 31 février à 10h', NOW);
   assert.strictEqual(r.date, null);

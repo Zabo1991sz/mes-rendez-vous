@@ -29,7 +29,10 @@
         <h1>Mes rendez-vous</h1>
         <div class="today-label" id="todayLabel"></div>
       </div>
-      <button class="btn-lock" id="lockBtn" type="button">🔒 Veille</button>
+      <div class="top-actions">
+        <button class="btn-top btn-cal" id="calBtn" type="button">📅 Calendrier</button>
+        <button class="btn-top" id="lockBtn" type="button">🔒 Veille</button>
+      </div>
     </header>
     <div id="list"></div>
     <button class="fab" id="addBtn" type="button" aria-label="Ajouter un rendez-vous">
@@ -38,16 +41,47 @@
     </button>
   </section>
 
+  <!-- Calendrier du mois -->
+  <section id="calendar" class="overlay hidden">
+    <div class="cal-wrap">
+      <div class="cal-head">
+        <button class="cal-nav" id="calPrev" type="button" aria-label="Mois précédent">◀</button>
+        <div class="cal-title">
+          <div id="calTitle"></div>
+          <button class="cal-today hidden" id="calToday" type="button">Revenir à ce mois-ci</button>
+        </div>
+        <button class="cal-nav" id="calNext" type="button" aria-label="Mois suivant">▶</button>
+      </div>
+      <div class="cal-weekdays">
+        <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-hint">Touchez un jour pour voir ou ajouter un rendez-vous.</div>
+      <button class="btn btn-secondary" id="calClose" type="button">◀ Retour à la liste</button>
+    </div>
+  </section>
+
+  <!-- Un jour du calendrier -->
+  <section id="day" class="overlay hidden">
+    <div class="overlay-inner">
+      <h2 id="dayTitle"></h2>
+      <div id="dayList"></div>
+      <button class="btn btn-yes" id="dayAdd" type="button">+ Ajouter un rendez-vous ce jour-là</button>
+      <button class="btn btn-secondary" id="dayBack" type="button">◀ Retour au calendrier</button>
+    </div>
+  </section>
+
   <!-- Dictée vocale -->
   <section id="voice" class="overlay hidden">
     <div class="overlay-inner">
       <h2>Nouveau rendez-vous</h2>
+      <div class="voice-for hidden" id="voiceFor"></div>
       <button class="mic" id="micBtn" type="button" aria-label="Parler">🎤</button>
       <div class="status" id="voiceStatus">Touchez le micro pour parler.</div>
       <div class="transcript" id="transcript"></div>
       <div class="example">
         Dites par exemple :<br>
-        <strong>« Rendez-vous chez le psy mardi 17 novembre à 10 heures »</strong>
+        <strong id="voiceExample">« Rendez-vous chez le psy mardi 17 novembre à 10 heures »</strong>
       </div>
       <div id="textForm" class="text-form hidden">
         <label for="textInput">Écrivez le rendez-vous :</label>

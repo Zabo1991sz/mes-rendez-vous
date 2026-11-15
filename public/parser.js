@@ -104,8 +104,11 @@
   };
 
   // ---------- Analyse principale ----------
-  function parse(text, now) {
+  // opts.defaultDate ('AAAA-MM-JJ') : date utilisée si la phrase n'en contient pas
+  // (ajout depuis un jour choisi dans le calendrier).
+  function parse(text, now, opts) {
     now = now || new Date();
+    opts = opts || {};
     var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var w = new Work(String(text || ''));
     var warnings = [];
@@ -189,6 +192,7 @@
     var motif = extractMotif(w.orig, w.norm);
     var title = buildTitle(motif);
 
+    if (!date && opts.defaultDate && !warnings.length) date = fromIso(opts.defaultDate);
     if (!date) warnings.unshift("Je n'ai pas compris la date. Merci de la choisir.");
 
     return {

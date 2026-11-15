@@ -135,43 +135,59 @@
     var html = '', nextDone = false, laterShown = false;
     list.forEach(function (a) {
       var past = isPast(a);
-      var rel = relLabel(a.date);
-      var cls = 'card';
-      var badgeCls = 'badge';
-      if (past) { cls += ' is-past'; badgeCls += ' past'; rel = "Aujourd'hui — déjà passé"; }
-      else if (a.date === t) { cls += ' is-today'; badgeCls += ' today'; }
-      else if (a.date === addDays(t, 1)) { cls += ' is-tomorrow'; badgeCls += ' tomorrow'; }
-
+      var isNext = false;
       if (!past && !nextDone) {
-        cls += ' is-next';
+        isNext = true;
         html += '<div class="next-label">Prochain rendez-vous</div>';
         nextDone = true;
       } else if (!past && !laterShown) {
         html += '<div class="next-label later-label">Ensuite</div>';
         laterShown = true;
       }
-
-      html += '<article class="' + cls + '" id="rdv-' + esc(a.id) + '">' +
-        '<div class="' + badgeCls + '">' + esc(rel) + '</div>' +
-        '<div class="card-date">' + esc(P.formatDate(a.date)) + '</div>' +
-        (a.time
-          ? '<div class="card-time">🕙 ' + esc(P.formatTime(a.time)) + '</div>'
-          : '<div class="card-time muted">Heure non précisée</div>') +
-        '<div class="card-title">' + esc(a.title) + '</div>' +
-        '<button class="btn-del" type="button" data-id="' + esc(a.id) + '">🗑 Supprimer</button>' +
-        '</article>';
+      html += cardHtml(a, isNext);
     });
     el.innerHTML = html;
   }
 
-  function flashCard(id) {
-    var card = $('rdv-' + id);
+  // Carte d'un rendez-vous (liste et vue « jour »)
+  function cardHtml(a, isNext) {
+    var t = todayIso();
+    var dayPast = a.date < t;
+    var past = dayPast || isPast(a);
+    var rel = dayPast ? 'Passé' : relLabel(a.date);
+    var cls = 'card' + (isNext ? ' is-next' : '');
+    var badgeCls = 'badge';
+    if (past) { cls += ' is-past'; badgeCls += ' past'; if (!dayPast) rel = "Aujourd'hui — déjà passé"; }
+    else if (a.date === t) { cls += ' is-today'; badgeCls += ' today'; }
+    else if (a.date === addDays(t, 1)) { cls += ' is-tomorrow'; badgeCls += ' tomorrow'; }
+
+    return '<article class="' + cls + '" data-rdv="' + esc(a.id) + '">' +
+      '<div class="' + badgeCls + '">' + esc(rel) + '</div>' +
+      '<div class="card-date">' + esc(P.formatDate(a.date)) + '</div>' +
+      (a.time
+        ? '<div class="card-time">🕙 ' + esc(P.formatTime(a.time)) + '</div>'
+        : '<div class="card-time muted">Heure non précisée</div>') +
+      '<div class="card-title">' + esc(a.title) + '</div>' +
+      '<button class="btn-del" type="button" data-id="' + esc(a.id) + '">🗑 Supprimer</button>' +
+      '</article>';
+  }
+
+  function flashCard(containerId, id) {
+    var card = $(containerId).querySelector('[data-rdv="' + id + '"]');
     if (!card) return;
     card.classList.add('flash');
     if (card.scrollIntoView) card.scrollIntoView({ block: 'center' });
   }
 
-  $('list').addEventListener('click', function (e) {
+  function isOpen(id) { return !$(id).classList.contains('hidden'); }
+
+  function refreshViews() {
+    renderList();
+    if (isOpen('calendar')) renderCalendar();
+    if (isOpen('day')) renderDay();
+  }
+
+  document.addEventListener('click', function (e) {
     var btn = e.target.closest ? e.target.closest('.btn-del') : null;
     if (!btn) return;
     var id = btn.getAttribute('data-id');
@@ -182,18 +198,103 @@
       function () {
         appts = appts.filter(function (x) { return x.id !== id; });
         persist();
-        renderList();
+        refreshViews();
         toast('Rendez-vous supprimé');
       });
   });
 
+  // ---------- Calendrier ----------
+  var MONTHS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre',
+    'Octobre', 'Novembre', 'Décembre'];
+  var cal = { year: 0, month: 0 };
+  var dayIso = null;
+
+  function openCalendar() {
+    var now = new Date();
+    cal.year = now.getFullYear();
+    cal.month = now.getMonth();
+    renderCalendar();
+    showOverlay('calendar');
+  }
+
+  function moveMonth(delta) {
+    var d = new Date(cal.year, cal.month + delta, 1);
+    cal.year = d.getFullYear();
+    cal.month = d.getMonth();
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    var now = new Date();
+    var t = todayIso();
+    var isCurrent = cal.year === now.getFullYear() && cal.month === now.getMonth();
+    $('calTitle').textContent = MONTHS_FR[cal.month] + ' ' + cal.year;
+    $('calToday').classList.toggle('hidden', isCurrent);
+
+    var counts = {};
+    appts.forEach(function (a) { counts[a.date] = (counts[a.date] || 0) + 1; });
+
+    var offset = (new Date(cal.year, cal.month, 1).getDay() + 6) % 7; // semaine commençant le lundi
+    var nbDays = new Date(cal.year, cal.month + 1, 0).getDate();
+    var html = '';
+    for (var i = 0; i < offset; i++) html += '<div class="cal-day empty"></div>';
+    for (var d = 1; d <= nbDays; d++) {
+      var iso = cal.year + '-' + pad(cal.month + 1) + '-' + pad(d);
+      var n = counts[iso] || 0;
+      var cls = 'cal-day';
+      if (iso < t) cls += ' is-past';
+      if (iso === t) cls += ' is-today';
+      if (n) cls += ' has-rdv';
+      html += '<button type="button" class="' + cls + '" data-date="' + iso + '">' + d +
+        (n ? '<span class="cal-count">' + n + ' rdv</span>' : '') + '</button>';
+    }
+    $('calGrid').innerHTML = html;
+  }
+
+  $('calGrid').addEventListener('click', function (e) {
+    var cell = e.target.closest ? e.target.closest('.cal-day') : null;
+    if (!cell || !cell.getAttribute('data-date')) return;
+    openDay(cell.getAttribute('data-date'));
+  });
+  $('calPrev').addEventListener('click', function () { moveMonth(-1); });
+  $('calNext').addEventListener('click', function () { moveMonth(1); });
+  $('calToday').addEventListener('click', function () {
+    var now = new Date();
+    cal.year = now.getFullYear(); cal.month = now.getMonth();
+    renderCalendar();
+  });
+  $('calClose').addEventListener('click', function () { hideOverlay('calendar'); renderList(); });
+  $('calBtn').addEventListener('click', openCalendar);
+
+  // ---------- Vue d'un jour ----------
+  function openDay(iso) {
+    dayIso = iso;
+    renderDay();
+    showOverlay('day');
+  }
+
+  function renderDay() {
+    if (!dayIso) return;
+    var t = todayIso();
+    var rel = dayIso === t ? "Aujourd'hui — " : dayIso === addDays(t, 1) ? 'Demain — ' : '';
+    $('dayTitle').textContent = rel + P.formatDate(dayIso);
+    var list = appts.filter(function (a) { return a.date === dayIso; }).sort(compare);
+    $('dayList').innerHTML = list.length
+      ? list.map(function (a) { return cardHtml(a, false); }).join('')
+      : '<div class="day-empty">Aucun rendez-vous ce jour-là.</div>';
+    $('dayAdd').classList.toggle('hidden', dayIso < t);
+  }
+
+  $('dayAdd').addEventListener('click', function () { openVoice(dayIso); });
+  $('dayBack').addEventListener('click', function () { hideOverlay('day'); renderCalendar(); });
+
   // ---------- Fenêtres ----------
-  var OVERLAYS = ['voice', 'verify', 'confirm'];
+  // Ordre = ordre d'empilement. Les fenêtres « bloquantes » empêchent la mise en veille (saisie en cours).
+  var OVERLAYS = ['calendar', 'day', 'voice', 'verify', 'confirm'];
+  var BLOCKING = ['voice', 'verify', 'confirm'];
   function showOverlay(id) { $(id).classList.remove('hidden'); $(id).scrollTop = 0; }
   function hideOverlay(id) { $(id).classList.add('hidden'); }
-  function isOverlayOpen() {
-    return OVERLAYS.some(function (id) { return !$(id).classList.contains('hidden'); });
-  }
+  function isOverlayOpen() { return BLOCKING.some(isOpen); }
   function closeAllOverlays() {
     cancelListening();
     stopSpeaking();
@@ -229,9 +330,20 @@
   function setStatus(t) { $('voiceStatus').textContent = t; }
   function setMic(on) { $('micBtn').classList.toggle('listening', on); }
 
-  function openVoice() {
+  var voiceDate = null; // date imposée quand on ajoute depuis un jour du calendrier
+
+  function openVoice(defaultDate) {
     stopSpeaking();
     cancelled = false;
+    voiceDate = typeof defaultDate === 'string' ? defaultDate : null;
+    if (voiceDate) {
+      $('voiceFor').textContent = 'Pour le ' + P.formatDate(voiceDate);
+      $('voiceFor').classList.remove('hidden');
+      $('voiceExample').textContent = '« Psy à 10 heures »';
+    } else {
+      $('voiceFor').classList.add('hidden');
+      $('voiceExample').textContent = '« Rendez-vous chez le psy mardi 17 novembre à 10 heures »';
+    }
     $('transcript').textContent = '';
     $('textInput').value = '';
     $('textForm').classList.add('hidden');
@@ -334,7 +446,7 @@
 
   function openVerify(text) {
     cancelListening();
-    var r = P.parse(text, new Date());
+    var r = P.parse(text, new Date(), { defaultDate: voiceDate });
     pending = { date: r.date, time: r.time, title: r.title, transcript: text, warnings: r.warnings };
     hideOverlay('voice');
     showOverlay('verify');
@@ -397,7 +509,7 @@
   });
 
   $('vEdit').addEventListener('click', function () { stopSpeaking(); toggleEdit(true); });
-  $('vRetry').addEventListener('click', function () { pending = null; hideOverlay('verify'); openVoice(); });
+  $('vRetry').addEventListener('click', function () { pending = null; hideOverlay('verify'); openVoice(voiceDate); });
   $('vCancel').addEventListener('click', function () { stopSpeaking(); pending = null; hideOverlay('verify'); });
 
   $('vSave').addEventListener('click', function () {
@@ -419,8 +531,14 @@
     }
     pending = null;
     hideOverlay('verify');
-    renderList();
-    flashCard(item.id);
+    if (isOpen('day')) {
+      dayIso = item.date; // si la phrase contenait une autre date, on affiche ce jour-là
+      refreshViews();
+      flashCard('dayList', item.id);
+    } else {
+      refreshViews();
+      flashCard('list', item.id);
+    }
     toast('✓ Rendez-vous enregistré');
     speak('Rendez-vous enregistré.');
   });
@@ -442,7 +560,7 @@
 
   $('lock').addEventListener('click', unlock);
   $('lockBtn').addEventListener('click', showLock);
-  $('addBtn').addEventListener('click', openVoice);
+  $('addBtn').addEventListener('click', function () { openVoice(null); });
 
   // ---------- Écran toujours allumé ----------
   var wakeLock = null;
