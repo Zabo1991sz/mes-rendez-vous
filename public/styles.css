@@ -33,11 +33,14 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- Écran de veille ---------- */
 .lock {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 24px 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  text-align: center; padding: 24px 16px; overflow-y: auto;
   background: linear-gradient(160deg, #1E5BB8 0%, #0E2F63 100%);
   color: #fff; cursor: pointer; z-index: 5;
 }
+/* centrage vertical « sûr » : si l'écran est trop bas, rien n'est coupé en haut */
+.lock > :first-child { margin-top: auto; }
+.lock > :last-child { margin-bottom: auto; }
 .lock-greeting { font-size: 2rem; opacity: .9; }
 .lock-time {
   font-size: 8rem; font-size: clamp(5rem, 20vw, 11rem);
@@ -230,6 +233,69 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
   z-index: 30; opacity: 0; transition: opacity .3s; pointer-events: none; max-width: 90%; text-align: center;
 }
 .toast.show { opacity: 1; }
+
+/* ---------- Écrans bas (téléphone tourné en paysage) ---------- */
+@media (max-height: 520px) {
+  html { font-size: 16px; }
+
+  .lock { padding: 12px 16px; }
+  .lock-greeting { font-size: 1.3rem; }
+  .lock-time { font-size: 5.5rem; margin: .05em 0; }
+  .lock-date { font-size: 1.4rem; margin-bottom: .6em; }
+  .lock-next { font-size: 1.05rem; padding: 8px 18px; margin-bottom: .8em; }
+  .lock-next strong { font-size: 1.25rem; }
+  .lock-hint { font-size: 1.15rem; }
+  .lock-hint br { display: none; }
+
+  .main { padding: 14px 16px 130px; }
+  .fab { width: 100px; height: 100px; right: 16px; bottom: 16px; }
+  .fab-plus { font-size: 4rem; }
+
+  .overlay { padding: 12px 16px 24px; }
+  .overlay h2 { font-size: 1.6rem; margin: 2px 0 10px; }
+
+  #calendar { padding: 8px 16px; }
+  .cal-head { margin-bottom: 4px; }
+  .cal-nav { width: 52px; height: 52px; font-size: 1.4rem; }
+  .cal-title { font-size: 1.5rem; }
+  .cal-today { margin-top: 4px; padding: 4px 10px; font-size: .9rem; }
+  .cal-weekdays div { font-size: .9rem; padding: 2px 0; }
+  .cal-grid { grid-gap: 4px; gap: 4px; }
+  .cal-day {
+    min-height: 0; height: 42px; flex-direction: row; justify-content: center; align-items: center;
+    font-size: 1.15rem; padding: 0 2px; border-radius: 10px;
+  }
+  .cal-count { margin: 0 0 0 6px; font-size: .7rem; padding: 2px 6px; }
+  .cal-hint { display: none; }
+  #calClose { margin-top: 10px; padding: 12px; font-size: 1.2rem; }
+
+  .mic { width: 110px; height: 110px; font-size: 3rem; margin: 6px auto 10px; }
+  .status { font-size: 1.3rem; }
+  .transcript { font-size: 1.3rem; margin: 8px 0; min-height: 1.4em; }
+  .example { font-size: 1rem; padding: 8px 14px; }
+  .btn { padding: 14px 12px; font-size: 1.25rem; margin-top: 10px; }
+  .btn-yes { font-size: 1.4rem; }
+
+  .said { margin-bottom: 8px; font-size: 1rem; }
+  .summary { padding: 2px 18px; }
+  .summary-row { padding: 8px 0; }
+  .summary-row .ico { font-size: 1.6rem; width: 48px; }
+  .summary-row .val { font-size: 1.4rem; }
+  .warn { font-size: 1.05rem; padding: 8px 12px; margin-top: 8px; }
+}
+
+/* En paysage : informations à gauche, boutons à droite (tout reste visible) */
+@media (max-height: 520px) and (min-width: 700px) {
+  .verify-layout {
+    max-width: 1100px; display: flex; align-items: flex-start; text-align: left;
+  }
+  .verify-info { flex: 1.4; min-width: 0; }
+  .verify-actions { flex: 1; margin-left: 18px; position: -webkit-sticky; position: sticky; top: 0; }
+  .verify-actions .btn:first-child { margin-top: 0; padding: 22px 12px; }
+  .verify-info h2 { text-align: left; }
+  .voice-actions { display: flex; margin: 0 -6px; }
+  .voice-actions .btn { margin-left: 6px; margin-right: 6px; }
+}
 
 /* ---------- Petits écrans (téléphone) ---------- */
 @media (max-width: 600px) {
