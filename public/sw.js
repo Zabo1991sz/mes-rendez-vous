@@ -1,5 +1,5 @@
-﻿// Permet Ã  l'appli de s'ouvrir mÃªme sans Internet.
-// StratÃ©gie Â« rÃ©seau d'abord Â» : les mises Ã  jour arrivent dÃ¨s que la tablette est connectÃ©e.
+﻿// Permet à l'appli de s'ouvrir même sans Internet.
+// Stratégie « réseau d'abord » : les mises à jour arrivent dès que la tablette est connectée.
 var CACHE = 'rdv-v3';
 var ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'parser.js', 'manifest.webmanifest',
   'icon.svg', 'icon-192.png', 'icon-512.png'];
