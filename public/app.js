@@ -1,6 +1,7 @@
 /*
  * Mes rendez-vous — application tablette.
- * Les rendez-vous sont enregistrés sur l'appareil (localStorage), avec des copies de sécurité (backup.js).
+ * Les rendez-vous sont enregistrés sur l'appareil (localStorage), avec des copies de sécurité (backup.js)
+ * et, si l'appareil est connecté, une sauvegarde en ligne partagée entre appareils (cloud.js).
  */
 (function () {
   'use strict';
@@ -15,10 +16,27 @@
   var SNAPSHOTS_KEY = 'mes-rendez-vous-copies';        // copies de sécurité automatiques
   var LAST_FILE_KEY = 'mes-rendez-vous-dernier-fichier'; // date du dernier fichier de sauvegarde
 
+  // Sauvegarde en ligne (Firebase). Ces valeurs ne sont pas secrètes : l'accès est protégé
+  // par le mot de passe du compte et par les règles Firestore (fichier firestore.rules).
+  var FIREBASE = { apiKey: 'AIzaSyC3ij47MbcqBrSKTkRLN8HRxdTM0rGV5Tk', projectId: 'mes-rendez-vous-6147c' };
+  var SYNC_EVERY_MS = 2 * 60 * 1000;      // regarder les changements faits ailleurs toutes les 2 minutes
+  var FULL_SYNC_EVERY_MS = 6 * 3600 * 1000; // vérification complète toutes les 6 heures
+
   var P = window.RdvParser;
   var B = window.RdvBackup;
+  var C = window.RdvCloud;
   var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
   function $(id) { return document.getElementById(id); }
+
+  var cloud = C.createClient({
+    config: FIREBASE,
+    fetch: function (url, opts) { return window.fetch(url, opts); },
+    store: {
+      get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+      remove: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+    }
+  });
 
   // ---------- Données ----------
   function load() {
@@ -29,13 +47,28 @@
   }
   // Enregistre les rendez-vous. Avant la première modification du jour, garde une copie de l'état
   // précédent (forceCopy : garder une copie quoi qu'il arrive, par ex. avant une récupération).
+  // Si l'appareil est connecté à la sauvegarde en ligne, les changements partent ensuite sur Internet.
   function persist(forceCopy) {
+    var before = load();
+    keepCopy(before, forceCopy);
+    var changes = C.diff(before, appts, new Date().toISOString(), keepFrom()); // pose aussi updatedAt
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appts)); } catch (e) { return false; }
+    if (changes.length && cloud.isConnected()) { cloud.enqueue(changes); scheduleSync(); }
+    return true;
+  }
+  // Enregistre ce qui arrive d'Internet (sans le renvoyer)
+  function persistFromCloud() {
+    keepCopy(load(), false);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appts)); } catch (e) {}
+  }
+  function keepCopy(before, force) {
     try {
-      var copies = B.addSnapshot(readSnapshots(), load(), new Date(), forceCopy);
+      var copies = B.addSnapshot(readSnapshots(), before, new Date(), force);
       localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(copies));
     } catch (e) { /* la copie de sécurité ne doit jamais empêcher l'enregistrement */ }
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appts)); return true; } catch (e) { return false; }
   }
+  // Les rendez-vous de plus de 30 jours sont retirés de l'appareil (ils restent dans la sauvegarde en ligne)
+  function keepFrom() { return addDays(todayIso(), -30); }
   function readSnapshots() {
     try { return B.readSnapshots(localStorage.getItem(SNAPSHOTS_KEY)); } catch (e) { return []; }
   }
@@ -60,7 +93,7 @@
     return appts.filter(function (a) { return a.date >= t; }).sort(compare);
   }
   function purgeOld() {
-    var limit = addDays(todayIso(), -30), n = appts.length;
+    var limit = keepFrom(), n = appts.length;
     appts = appts.filter(function (a) { return a.date >= limit; });
     if (appts.length !== n) persist();
   }
@@ -426,9 +459,10 @@
   // ---------- Sauvegarde ----------
   function plural(n, word) { return n + ' ' + word + (n > 1 ? 's' : ''); }
 
-  function openBackup() { renderBackup(); showOverlay('backup'); }
+  function openBackup() { cloudMsg = ''; renderBackup(); showOverlay('backup'); }
 
   function renderBackup() {
+    renderCloud();
     var last = null;
     try { last = localStorage.getItem(LAST_FILE_KEY); } catch (e) {}
     var lastDate = last ? new Date(last) : null;
@@ -511,6 +545,126 @@
   $('bkOpen').addEventListener('click', function () { $('bkFile').click(); });
   $('bkClose').addEventListener('click', function () { hideOverlay('backup'); });
   $('backupBtn').addEventListener('click', openBackup);
+
+  // ---------- Sauvegarde en ligne ----------
+  var syncing = false, syncAgain = false, syncTimer = null, lastFullSync = 0, cloudMsg = '';
+
+  function scheduleSync(delay) {
+    if (!cloud.isConnected()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () { syncNow(false); }, delay == null ? 1500 : delay);
+  }
+
+  // Envoie les changements de l'appareil et récupère ceux faits ailleurs (téléphone…)
+  function syncNow(full) {
+    if (!cloud.isConnected()) return Promise.resolve();
+    if (syncing) { syncAgain = true; return Promise.resolve(); }
+    syncing = true;
+    renderCloud();
+    var wantFull = full || Date.now() - lastFullSync > FULL_SYNC_EVERY_MS;
+    return cloud.exchange(wantFull).then(function (ex) {
+      if (ex.full) lastFullSync = Date.now();
+      // La fusion se fait maintenant, avec la liste à jour (elle a pu changer pendant l'échange)
+      var r = C.reconcile(appts, cloud.outbox(), ex.docs, keepFrom(), ex.full, new Date().toISOString());
+      if (r.changed) {
+        appts = r.appointments;
+        persistFromCloud();
+        refreshViews();
+        if (!$('lock').classList.contains('hidden')) renderLock();
+        if (isOpen('backup')) renderBackup();
+      }
+      if (r.toSend.length) { cloud.enqueue(r.toSend); syncAgain = true; }
+    }).catch(function () { /* l'erreur est mémorisée et affichée dans l'écran Sauvegarde */ }).then(function () {
+      syncing = false;
+      renderCloud();
+      if (syncAgain) { syncAgain = false; scheduleSync(500); }
+    });
+  }
+
+  // Problème qui mérite d'être signalé (petit ⚠️ sur le bouton Sauvegarde)
+  function cloudProblem() {
+    if (!cloud.isConnected()) return false;
+    var s = cloud.status();
+    if (s.errorCode === 'AUTH' || s.errorCode === 'DENIED') return true;
+    var last = s.lastOk ? new Date(s.lastOk).getTime() : 0;
+    return !!s.error && Date.now() - last > 2 * 86400000; // plus de 2 jours sans réussite
+  }
+
+  function whenText(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    var day = P.toIso(d);
+    var hm = P.formatTime(pad(d.getHours()) + ':' + pad(d.getMinutes()));
+    if (day === todayIso()) return "aujourd'hui à " + hm;
+    if (day === addDays(todayIso(), -1)) return 'hier à ' + hm;
+    return 'le ' + P.formatDate(day).replace(/^./, function (c) { return c.toLowerCase(); }) + ' à ' + hm;
+  }
+
+  function renderCloud() {
+    $('backupBtn').textContent = '💾 Sauvegarde' + (cloudProblem() ? ' ⚠️' : '');
+    if (!isOpen('backup')) return;
+    var s = cloud.session(), st = cloud.status(), html, needLogin = !s;
+    if (!s) {
+      html = 'Pas connecté : les rendez-vous restent seulement sur cet appareil.';
+    } else {
+      html = '<strong>✓ Connecté</strong> (' + esc(s.email) + ')<br>';
+      if (syncing) html += 'Synchronisation…';
+      else if (st.errorCode === 'AUTH' || st.errorCode === 'DENIED') {
+        html += '<span class="cloud-err">⚠️ ' + esc(st.error) + '</span>';
+        needLogin = true;
+      } else if (st.error) {
+        html += '<span class="cloud-err">⚠️ ' + esc(st.error) + '</span>' +
+          (st.lastOk ? '<br>Dernière synchronisation réussie ' + esc(whenText(st.lastOk)) + '.' : '');
+      } else if (st.lastOk) html += 'Dernière synchronisation ' + esc(whenText(st.lastOk)) + '.';
+      var n = cloud.pending();
+      if (n && !syncing) html += '<br>' + plural(n, 'modification') + ' en attente d’envoi.';
+    }
+    if (cloudMsg) html += '<div class="cloud-err">' + esc(cloudMsg) + '</div>';
+    $('cloudState').innerHTML = html;
+    $('cloudLogin').classList.toggle('hidden', !needLogin);
+    $('cloudActions').classList.toggle('hidden', !s);
+    if (needLogin && s && !$('cloudEmail').value) $('cloudEmail').value = s.email;
+  }
+
+  $('cloudSignIn').addEventListener('click', function () {
+    var btn = this;
+    var email = $('cloudEmail').value.trim(), pass = $('cloudPass').value;
+    if (!email || !pass) { cloudMsg = 'Saisissez l’e-mail et le mot de passe.'; renderCloud(); return; }
+    btn.disabled = true;
+    cloudMsg = 'Connexion…';
+    renderCloud();
+    cloud.signIn(email, pass).then(function () {
+      $('cloudPass').value = '';
+      cloudMsg = '';
+      lastFullSync = 0;
+      toast('✓ Connecté à la sauvegarde en ligne');
+      return syncNow(true);
+    }).catch(function (e) {
+      cloudMsg = e.message || 'Connexion impossible.';
+    }).then(function () {
+      btn.disabled = false;
+      renderCloud();
+    });
+  });
+  $('cloudPass').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('cloudSignIn').click(); }
+  });
+  $('cloudSyncNow').addEventListener('click', function () { cloudMsg = ''; syncNow(true); });
+  $('cloudSignOut').addEventListener('click', function () {
+    var n = cloud.pending();
+    askConfirm('Se déconnecter de la sauvegarde en ligne ?',
+      'Les rendez-vous restent sur cet appareil, mais ne seront plus sauvegardés en ligne.' +
+      (n ? '<br>⚠️ ' + plural(n, 'modification') + ' pas encore envoyée' + (n > 1 ? 's' : '') + ' sera perdue en ligne.' : ''),
+      function () {
+        cloud.signOut();
+        cloudMsg = '';
+        renderBackup();
+        toast('Déconnecté de la sauvegarde en ligne');
+      }, { yes: 'Oui, se déconnecter' });
+  });
+
+  setInterval(function () { if (document.visibilityState === 'visible') syncNow(false); }, SYNC_EVERY_MS);
+  window.addEventListener('online', function () { syncNow(false); });
 
   var toastTimer = null;
   function toast(text) {
@@ -784,6 +938,7 @@
     if (document.visibilityState === 'visible') {
       requestWakeLock();
       refresh();
+      syncNow(false);
     }
   });
 
@@ -801,6 +956,8 @@
   // ---------- Démarrage ----------
   purgeOld();
   renderLock();
+  renderCloud();
+  syncNow(true);
 
   if ('serviceWorker' in navigator &&
       (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {

@@ -31,6 +31,7 @@
     if (typeof a.said === 'string') out.said = a.said.slice(0, 1000);
     if (typeof a.createdAt === 'string') out.createdAt = a.createdAt;
     if (typeof a.note === 'string' && a.note) out.note = a.note.slice(0, 5000);
+    if (typeof a.updatedAt === 'string') out.updatedAt = a.updatedAt;
     return out;
   }
 
@@ -118,6 +119,7 @@
     addSnapshot: addSnapshot,
     readSnapshots: readSnapshots,
     fileName: fileName,
+    clean: cleanAppt,
     MAX_SNAPSHOTS: MAX_SNAPSHOTS
   };
 });

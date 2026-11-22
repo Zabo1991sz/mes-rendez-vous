@@ -77,6 +77,24 @@
     <div class="overlay-inner">
       <h2>Sauvegarde</h2>
       <div class="backup-info" id="bkInfo"></div>
+
+      <h3 class="backup-sub">Sauvegarde en ligne</h3>
+      <div class="cloud-box">
+        <div class="cloud-state" id="cloudState"></div>
+        <div class="cloud-login hidden" id="cloudLogin">
+          <label for="cloudEmail">E-mail</label>
+          <input type="email" id="cloudEmail" autocomplete="username" autocapitalize="none" spellcheck="false">
+          <label for="cloudPass">Mot de passe</label>
+          <input type="password" id="cloudPass" autocomplete="current-password">
+          <button class="btn btn-yes" id="cloudSignIn" type="button">Se connecter</button>
+        </div>
+        <div class="row-btns hidden" id="cloudActions">
+          <button class="btn btn-secondary" id="cloudSyncNow" type="button">🔄 Synchroniser</button>
+          <button class="btn btn-secondary" id="cloudSignOut" type="button">Se déconnecter</button>
+        </div>
+      </div>
+
+      <h3 class="backup-sub">Copie dans un fichier</h3>
       <button class="btn btn-yes" id="bkSave" type="button">💾 Enregistrer une copie</button>
       <button class="btn btn-edit" id="bkOpen" type="button">📂 Récupérer depuis un fichier</button>
       <input type="file" id="bkFile" accept=".json,application/json" class="hidden">
@@ -190,6 +208,7 @@
 
   <script src="parser.js"></script>
   <script src="backup.js"></script>
+  <script src="cloud.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -259,6 +259,16 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
 }
 .snap-empty { font-size: 1.1rem; color: var(--muted); text-align: left; }
 .backup-help { font-size: 1.05rem; color: var(--muted); margin: 18px 0 0; }
+.cloud-box { background: #fff; border-radius: 18px; padding: 16px 20px; text-align: left; }
+.cloud-state { font-size: 1.2rem; line-height: 1.5; }
+.cloud-err { color: var(--red); font-weight: 600; }
+.cloud-login label { display: block; font-size: 1.1rem; color: var(--muted); margin: 14px 0 6px; }
+.cloud-login input {
+  width: 100%; font-size: 1.4rem; padding: 12px 14px; border-radius: 14px; border: 2px solid var(--border);
+  font-family: inherit; background: #fff; color: var(--text); -webkit-user-select: text; user-select: text;
+}
+.cloud-login input:focus { outline: none; border-color: var(--primary); }
+.cloud-box .row-btns .btn { font-size: 1.15rem; padding: 14px 10px; }
 
 .toast {
   position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
