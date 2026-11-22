@@ -457,7 +457,8 @@
   });
 
   // ---------- Sauvegarde ----------
-  function plural(n, word) { return n + ' ' + word + (n > 1 ? 's' : ''); }
+  // « 2 modifications », mais « 2 rendez-vous » (mot déjà terminé par s)
+  function plural(n, word) { return n + ' ' + word + (n > 1 && !/s$/.test(word) ? 's' : ''); }
 
   function openBackup() { cloudMsg = ''; renderBackup(); showOverlay('backup'); }
 
@@ -645,6 +646,11 @@
       btn.disabled = false;
       renderCloud();
     });
+  });
+  $('cloudShowPass').addEventListener('click', function () {
+    var input = $('cloudPass'), show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    this.textContent = show ? '🙈 Masquer' : '👁 Afficher';
   });
   $('cloudPass').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); $('cloudSignIn').click(); }

@@ -85,7 +85,10 @@
           <label for="cloudEmail">E-mail</label>
           <input type="email" id="cloudEmail" autocomplete="username" autocapitalize="none" spellcheck="false">
           <label for="cloudPass">Mot de passe</label>
-          <input type="password" id="cloudPass" autocomplete="current-password">
+          <div class="pass-row">
+            <input type="password" id="cloudPass" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false">
+            <button class="btn-show" id="cloudShowPass" type="button">👁 Afficher</button>
+          </div>
           <button class="btn btn-yes" id="cloudSignIn" type="button">Se connecter</button>
         </div>
         <div class="row-btns hidden" id="cloudActions">
