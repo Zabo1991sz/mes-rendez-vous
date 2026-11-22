@@ -1,6 +1,6 @@
 /*
  * Mes rendez-vous — application tablette.
- * Les rendez-vous sont enregistrés sur l'appareil (localStorage).
+ * Les rendez-vous sont enregistrés sur l'appareil (localStorage), avec des copies de sécurité (backup.js).
  */
 (function () {
   'use strict';
@@ -12,8 +12,11 @@
     speakBack: true              // relire le rendez-vous à voix haute avant validation
   };
   var STORAGE_KEY = 'mes-rendez-vous-v1';
+  var SNAPSHOTS_KEY = 'mes-rendez-vous-copies';        // copies de sécurité automatiques
+  var LAST_FILE_KEY = 'mes-rendez-vous-dernier-fichier'; // date du dernier fichier de sauvegarde
 
   var P = window.RdvParser;
+  var B = window.RdvBackup;
   var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
   function $(id) { return document.getElementById(id); }
 
@@ -24,8 +27,17 @@
       return Array.isArray(arr) ? arr : [];
     } catch (e) { return []; }
   }
-  function persist() {
+  // Enregistre les rendez-vous. Avant la première modification du jour, garde une copie de l'état
+  // précédent (forceCopy : garder une copie quoi qu'il arrive, par ex. avant une récupération).
+  function persist(forceCopy) {
+    try {
+      var copies = B.addSnapshot(readSnapshots(), load(), new Date(), forceCopy);
+      localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(copies));
+    } catch (e) { /* la copie de sécurité ne doit jamais empêcher l'enregistrement */ }
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appts)); return true; } catch (e) { return false; }
+  }
+  function readSnapshots() {
+    try { return B.readSnapshots(localStorage.getItem(SNAPSHOTS_KEY)); } catch (e) { return []; }
   }
   var appts = load();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
@@ -297,8 +309,8 @@
 
   // ---------- Fenêtres ----------
   // Ordre = ordre d'empilement. Les fenêtres « bloquantes » empêchent la mise en veille (saisie en cours).
-  var OVERLAYS = ['calendar', 'day', 'note', 'voice', 'verify', 'confirm'];
-  var BLOCKING = ['note', 'voice', 'verify', 'confirm'];
+  var OVERLAYS = ['calendar', 'day', 'backup', 'note', 'voice', 'verify', 'confirm'];
+  var BLOCKING = ['backup', 'note', 'voice', 'verify', 'confirm'];
   function showOverlay(id) { $(id).classList.remove('hidden'); $(id).scrollTop = 0; }
   function hideOverlay(id) { $(id).classList.add('hidden'); }
   function isOverlayOpen() { return BLOCKING.some(isOpen); }
@@ -410,6 +422,95 @@
     askConfirm('Enregistrer la note ?', 'La note a été modifiée.', saveNote,
       { yes: '✓ Oui, enregistrer', no: 'Non, ne pas garder', danger: false, onNo: closeNote });
   });
+
+  // ---------- Sauvegarde ----------
+  function plural(n, word) { return n + ' ' + word + (n > 1 ? 's' : ''); }
+
+  function openBackup() { renderBackup(); showOverlay('backup'); }
+
+  function renderBackup() {
+    var last = null;
+    try { last = localStorage.getItem(LAST_FILE_KEY); } catch (e) {}
+    var lastDate = last ? new Date(last) : null;
+    $('bkInfo').innerHTML = '<strong>' + plural(appts.length, 'rendez-vous') + '</strong> sur cette tablette.<br>' +
+      (lastDate && !isNaN(lastDate)
+        ? 'Dernière copie enregistrée : ' + esc(P.formatDate(P.toIso(lastDate)).replace(/^./, function (c) { return c.toLowerCase(); }))
+        : 'Aucune copie enregistrée dans un fichier pour l’instant.');
+
+    var copies = readSnapshots().reverse(); // la plus récente en premier
+    $('bkSnaps').innerHTML = copies.length
+      ? copies.map(function (s, i) {
+        var at = new Date(s.at);
+        var hhmm = isNaN(at) ? '' : ' à ' + P.formatTime(pad(at.getHours()) + ':' + pad(at.getMinutes()));
+        return '<div class="snap"><div class="snap-text"><strong>' + esc(P.formatDate(s.day) + hhmm) + '</strong>' +
+          '<span>' + esc(plural(s.appointments.length, 'rendez-vous')) + '</span></div>' +
+          '<button class="btn-snap" type="button" data-snap="' + i + '">Récupérer</button></div>';
+      }).join('')
+      : '<div class="snap-empty">Pas encore de copie : elle se fera à la prochaine modification.</div>';
+  }
+
+  function saveBackupFile() {
+    try {
+      var blob = new Blob([B.serialize(appts)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = B.fileName();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      try { localStorage.setItem(LAST_FILE_KEY, new Date().toISOString()); } catch (e) {}
+      renderBackup();
+      toast('✓ Copie enregistrée dans « Téléchargements »');
+    } catch (e) {
+      toast("Erreur : la copie n'a pas pu être enregistrée");
+    }
+  }
+
+  // Récupère des rendez-vous : ajoute seulement ceux qui manquent, n'efface jamais rien.
+  function restoreFrom(list, fromText) {
+    var n = B.merge(appts, list).added;
+    if (!n) { toast('Rien à récupérer : tous ces rendez-vous sont déjà là'); return; }
+    askConfirm('Récupérer ' + plural(n, 'rendez-vous') + ' ?',
+      fromText + '<br>Les rendez-vous déjà sur la tablette sont gardés.',
+      function () {
+        var before = appts;
+        var r = B.merge(appts, list);
+        appts = r.appointments;
+        if (!persist(true)) { appts = before; toast("Erreur : la récupération n'a pas pu être enregistrée"); return; }
+        renderBackup();
+        refreshViews();
+        toast('✓ ' + plural(r.added, 'rendez-vous') + ' ' + (r.added > 1 ? 'récupérés' : 'récupéré'));
+      }, { yes: '✓ Oui, récupérer', danger: false });
+  }
+
+  $('bkFile').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = ''; // pour pouvoir rechoisir le même fichier
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast("Ce fichier n'est pas une sauvegarde de Mes rendez-vous."); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try { data = B.parse(String(reader.result)); } catch (e) { toast(e.message); return; }
+      var d = data.savedAt ? new Date(data.savedAt) : null;
+      restoreFrom(data.appointments, d && !isNaN(d) ? 'Copie du ' + P.formatDate(P.toIso(d)) : 'Fichier : ' + file.name);
+    };
+    reader.onerror = function () { toast("Le fichier n'a pas pu être lu"); };
+    reader.readAsText(file);
+  });
+
+  $('bkSnaps').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.btn-snap') : null;
+    if (!btn) return;
+    var s = readSnapshots().reverse()[+btn.getAttribute('data-snap')];
+    if (s) restoreFrom(s.appointments, 'Copie automatique du ' + P.formatDate(s.day));
+  });
+  $('bkSave').addEventListener('click', saveBackupFile);
+  $('bkOpen').addEventListener('click', function () { $('bkFile').click(); });
+  $('bkClose').addEventListener('click', function () { hideOverlay('backup'); });
+  $('backupBtn').addEventListener('click', openBackup);
 
   var toastTimer = null;
   function toast(text) {

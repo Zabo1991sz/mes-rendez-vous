@@ -240,6 +240,26 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
 .confirm-text { font-size: 1.8rem; font-weight: 700; }
 .confirm-detail { font-size: 1.35rem; color: var(--muted); margin-top: 12px; line-height: 1.4; }
 
+/* ---------- Sauvegarde ---------- */
+.link-backup {
+  display: block; margin: 28px 0 0; padding: 12px 18px; font-size: 1rem; color: var(--muted);
+  background: transparent; border: 2px solid var(--border); border-radius: 14px;
+}
+.backup-info { font-size: 1.3rem; line-height: 1.5; background: #fff; border-radius: 18px; padding: 16px 20px; }
+.backup-sub { font-size: 1.3rem; margin: 30px 0 10px; text-align: left; }
+.snap {
+  display: flex; align-items: center; justify-content: space-between; text-align: left;
+  background: #fff; border-radius: 16px; padding: 12px 16px; margin-top: 10px;
+}
+.snap-text { font-size: 1.15rem; line-height: 1.35; }
+.snap-text span { display: block; color: var(--muted); }
+.btn-snap {
+  flex-shrink: 0; margin-left: 12px; font-size: 1.05rem; font-weight: 700; padding: 12px 16px; border-radius: 12px;
+  border: 2px solid var(--primary); background: #fff; color: var(--primary-dark);
+}
+.snap-empty { font-size: 1.1rem; color: var(--muted); text-align: left; }
+.backup-help { font-size: 1.05rem; color: var(--muted); margin: 18px 0 0; }
+
 .toast {
   position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
   background: #1C1C1E; color: #fff; font-size: 1.5rem; padding: 18px 30px; border-radius: 999px;

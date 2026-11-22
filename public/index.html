@@ -35,6 +35,7 @@
       </div>
     </header>
     <div id="list"></div>
+    <button class="link-backup" id="backupBtn" type="button">💾 Sauvegarde</button>
     <button class="fab" id="addBtn" type="button" aria-label="Ajouter un rendez-vous">
       <span class="fab-plus">+</span>
       <span class="fab-label">Ajouter</span>
@@ -68,6 +69,21 @@
       <div id="dayList"></div>
       <button class="btn btn-yes" id="dayAdd" type="button">+ Ajouter un rendez-vous ce jour-là</button>
       <button class="btn btn-secondary" id="dayBack" type="button">◀ Retour au calendrier</button>
+    </div>
+  </section>
+
+  <!-- Sauvegarde -->
+  <section id="backup" class="overlay hidden">
+    <div class="overlay-inner">
+      <h2>Sauvegarde</h2>
+      <div class="backup-info" id="bkInfo"></div>
+      <button class="btn btn-yes" id="bkSave" type="button">💾 Enregistrer une copie</button>
+      <button class="btn btn-edit" id="bkOpen" type="button">📂 Récupérer depuis un fichier</button>
+      <input type="file" id="bkFile" accept=".json,application/json" class="hidden">
+      <h3 class="backup-sub">Copies automatiques sur cette tablette</h3>
+      <div id="bkSnaps"></div>
+      <p class="backup-help">« Récupérer » ajoute seulement les rendez-vous qui manquent : rien n'est effacé.</p>
+      <button class="btn btn-secondary" id="bkClose" type="button">◀ Retour à la liste</button>
     </div>
   </section>
 
@@ -173,6 +189,7 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="parser.js"></script>
+  <script src="backup.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
