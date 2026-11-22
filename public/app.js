@@ -467,7 +467,7 @@
     var last = null;
     try { last = localStorage.getItem(LAST_FILE_KEY); } catch (e) {}
     var lastDate = last ? new Date(last) : null;
-    $('bkInfo').innerHTML = '<strong>' + plural(appts.length, 'rendez-vous') + '</strong> sur cette tablette.<br>' +
+    $('bkInfo').innerHTML = '<strong>' + plural(appts.length, 'rendez-vous') + '</strong> sur cet appareil.<br>' +
       (lastDate && !isNaN(lastDate)
         ? 'Dernière copie enregistrée : ' + esc(P.formatDate(P.toIso(lastDate)).replace(/^./, function (c) { return c.toLowerCase(); }))
         : 'Aucune copie enregistrée dans un fichier pour l’instant.');
