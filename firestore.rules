@@ -7,7 +7,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function estLaFamille() {
-      return request.auth != null && request.auth.uid == 'LccClu101whcnRWGKBrVypN9oMg1';
+      return request.auth != null && request.auth.uid == '6VzcdhcIQZdUJgHNv4guZnAY0vj2';
     }
 
     // Un document par rendez-vous. « deleted » marque un rendez-vous supprimé (pour les autres appareils).
