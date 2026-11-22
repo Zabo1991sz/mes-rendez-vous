@@ -22,9 +22,10 @@ npm test
 - `public/app.js` : fonctionnement (veille, liste, dictée, vérification, modification). Réglages en haut du fichier (prénom, délai de mise en veille, lecture à voix haute, heures du mode nuit).
 - `public/parser.js` : compréhension de la phrase (date, heure, motif)
 - `public/backup.js` : sauvegarde (fichier `.json` à enregistrer / récupérer, copies automatiques)
+- `public/cloud.js` : sauvegarde en ligne (Firebase), partagée entre tablette et téléphone
 - `public/sw.js`, `public/manifest.webmanifest` : installation sur la tablette et fonctionnement hors ligne
 
-Les rendez-vous sont enregistrés uniquement sur l'appareil.
+Les rendez-vous sont enregistrés sur l'appareil, avec une sauvegarde en ligne si l'appareil est connecté (voir plus bas).
 
 ## Sauvegarde
 
