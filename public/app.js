@@ -10,7 +10,9 @@
   var CONFIG = {
     name: 'Marianna',            // prénom affiché sur l'écran de veille ('' pour aucun)
     lockAfterMs: 2 * 60 * 1000,  // retour à l'écran de veille après 2 minutes sans toucher
-    speakBack: true              // relire le rendez-vous à voix haute avant validation
+    speakBack: true,             // relire le rendez-vous à voix haute avant validation
+    nightFrom: 21,               // écran de veille sombre à partir de 21 h…
+    nightUntil: 7                // … et jusqu'à 7 h
   };
   var STORAGE_KEY = 'mes-rendez-vous-v1';
   var SNAPSHOTS_KEY = 'mes-rendez-vous-copies';        // copies de sécurité automatiques
@@ -132,6 +134,8 @@
     var now = new Date();
     var h = now.getHours();
     var hello = h >= 18 || h < 5 ? 'Bonsoir' : 'Bonjour';
+    // Mode nuit : écran sombre pour ne pas éclairer la pièce
+    $('lock').classList.toggle('night', h >= CONFIG.nightFrom || h < CONFIG.nightUntil);
     $('lockGreeting').textContent = hello + (CONFIG.name ? ' ' + CONFIG.name : '');
     $('lockTime').textContent = pad(h) + ':' + pad(now.getMinutes());
     $('lockDate').textContent = P.formatDate(P.toIso(now));
@@ -217,6 +221,7 @@
       (a.note
         ? '<button class="btn-note has-note" type="button" data-note="' + esc(a.id) + '">📝 Voir la note</button>'
         : '<button class="btn-note" type="button" data-note="' + esc(a.id) + '">＋ Ajouter une note</button>') +
+      '<button class="btn-mod" type="button" data-mod="' + esc(a.id) + '">✏️ Modifier</button>' +
       '<button class="btn-del" type="button" data-id="' + esc(a.id) + '">🗑 Supprimer</button>' +
       '</div>' +
       '</article>';
@@ -240,6 +245,8 @@
   document.addEventListener('click', function (e) {
     var noteBtn = e.target.closest ? e.target.closest('.btn-note') : null;
     if (noteBtn) { openNote(noteBtn.getAttribute('data-note')); return; }
+    var modBtn = e.target.closest ? e.target.closest('.btn-mod') : null;
+    if (modBtn) { openEdit(modBtn.getAttribute('data-mod')); return; }
     var btn = e.target.closest ? e.target.closest('.btn-del') : null;
     if (!btn) return;
     var id = btn.getAttribute('data-id');
@@ -817,6 +824,8 @@
     cancelListening();
     var r = P.parse(text, new Date(), { defaultDate: voiceDate });
     pending = { date: r.date, time: r.time, title: r.title, transcript: text, warnings: r.warnings };
+    $('verifyTitle').textContent = 'Est-ce bien correct ?';
+    $('vRetry').classList.remove('hidden');
     hideOverlay('voice');
     showOverlay('verify');
     toggleEdit(!r.date);
@@ -881,9 +890,49 @@
   $('vRetry').addEventListener('click', function () { pending = null; hideOverlay('verify'); openVoice(voiceDate); });
   $('vCancel').addEventListener('click', function () { stopSpeaking(); pending = null; hideOverlay('verify'); });
 
+  // ---------- Modifier un rendez-vous (même écran que la vérification, champs ouverts) ----------
+  function openEdit(id) {
+    var a = findAppt(id);
+    if (!a) return;
+    stopSpeaking();
+    cancelListening();
+    pending = { editId: id, date: a.date, time: a.time || null, title: a.title, transcript: '', warnings: [] };
+    $('verifyTitle').textContent = 'Modifier le rendez-vous';
+    $('vRetry').classList.add('hidden');
+    showOverlay('verify');
+    toggleEdit(true);
+    renderVerify();
+  }
+
+  function saveEdit() {
+    var a = findAppt(pending.editId);
+    if (!a) { pending = null; hideOverlay('verify'); toast("Ce rendez-vous n'existe plus"); return; }
+    var old = { date: a.date, time: a.time, title: a.title };
+    a.date = pending.date;
+    a.time = pending.time || '';
+    a.title = pending.title || 'Rendez-vous';
+    if (!persist()) {
+      a.date = old.date; a.time = old.time; a.title = old.title;
+      toast("Erreur : la modification n'a pas pu être enregistrée");
+      return;
+    }
+    pending = null;
+    hideOverlay('verify');
+    if (isOpen('day')) {
+      dayIso = a.date; // si la date a changé, on affiche le nouveau jour
+      refreshViews();
+      flashCard('dayList', a.id);
+    } else {
+      refreshViews();
+      flashCard('list', a.id);
+    }
+    toast('✓ Rendez-vous modifié');
+  }
+
   $('vSave').addEventListener('click', function () {
     if (!pending || !pending.date) return;
     stopSpeaking();
+    if (pending.editId) { saveEdit(); return; }
     var item = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       date: pending.date,

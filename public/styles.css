@@ -54,6 +54,10 @@ button { font-family: inherit; cursor: pointer; }
 .lock-next strong { display: block; font-size: 1.7rem; }
 .lock-hint { font-size: 1.5rem; line-height: 1.4; animation: pulse 2.4s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+/* Mode nuit : fond noir, texte gris, pas d'animation */
+.lock.night { background: #000; color: #8C8C8C; }
+.lock.night .lock-next { background: rgba(255, 255, 255, .07); }
+.lock.night .lock-hint { animation: none; opacity: .6; }
 
 /* ---------- Liste ---------- */
 .main { max-width: 960px; margin: 0 auto; padding: 24px 16px 190px; }
@@ -149,6 +153,10 @@ button { font-family: inherit; cursor: pointer; }
 .btn-note {
   font-size: 1.05rem; padding: 10px 16px; border-radius: 12px;
   border: 2px dashed #B9C4D6; background: #fff; color: var(--muted);
+}
+.btn-mod {
+  font-size: 1.05rem; padding: 10px 16px; border-radius: 12px;
+  border: 2px solid #B9C4D6; background: #fff; color: var(--primary-dark);
 }
 .btn-note.has-note {
   font-size: 1.25rem; font-weight: 700; border: 2px solid #E0A800; background: #FFF1B8; color: #4A3700;

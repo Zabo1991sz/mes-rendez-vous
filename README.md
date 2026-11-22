@@ -19,7 +19,7 @@ npm test
 ## Fichiers
 
 - `public/index.html`, `public/styles.css` : les écrans
-- `public/app.js` : fonctionnement (veille, liste, dictée, vérification). Réglages en haut du fichier (prénom, délai de mise en veille, lecture à voix haute).
+- `public/app.js` : fonctionnement (veille, liste, dictée, vérification, modification). Réglages en haut du fichier (prénom, délai de mise en veille, lecture à voix haute, heures du mode nuit).
 - `public/parser.js` : compréhension de la phrase (date, heure, motif)
 - `public/backup.js` : sauvegarde (fichier `.json` à enregistrer / récupérer, copies automatiques)
 - `public/sw.js`, `public/manifest.webmanifest` : installation sur la tablette et fonctionnement hors ligne
