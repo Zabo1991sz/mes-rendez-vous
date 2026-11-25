@@ -61,3 +61,33 @@ test('mise en forme', () => {
   assert.strictEqual(P.formatTime('10:00'), '10 h');
   assert.strictEqual(P.formatTime('14:30'), '14 h 30');
 });
+
+// ---------- Périodes (vacances…) ----------
+const ranges = [
+  ['Vacances du 1er septembre au 20 septembre', '2027-09-01', '2027-09-20', 'Vacances', null],
+  ['vacances du 1er au 20 décembre', '2026-12-01', '2026-12-20', 'Vacances', null],
+  ['Vacances du 28 décembre au 3 janvier', '2026-12-28', '2027-01-03', 'Vacances', null],
+  ['Séjour chez ma fille du lundi 7 décembre au dimanche 13 décembre', '2026-12-07', '2026-12-13', 'Séjour chez ma fille', null],
+  ['vacances du 1/2 au 15/2', '2027-02-01', '2027-02-15', 'Vacances', null],
+  ['cure du 10 janvier 2027 jusqu\'au 24 janvier 2027 à 9h', '2027-01-10', '2027-01-24', 'Cure', '09:00'],
+];
+for (const [text, date, endDate, title, time] of ranges) {
+  test('période : ' + text, () => {
+    const r = P.parse(text, NOW);
+    assert.deepStrictEqual({ date: r.date, endDate: r.endDate, title: r.title, time: r.time },
+      { date, endDate, title, time });
+  });
+}
+
+test('période : aucun avertissement sans heure', () => {
+  const r = P.parse('Vacances du 1er septembre au 20 septembre', NOW);
+  assert.deepStrictEqual(r.warnings, []);
+});
+
+test('rendez-vous simple : pas de date de fin', () => {
+  assert.strictEqual(P.parse('dentiste le 3 décembre à 9h', NOW).endDate, null);
+});
+
+test('formatRange', () => {
+  assert.strictEqual(P.formatRange('2026-12-01', '2026-12-20', { now: NOW }), 'Du mardi 1er décembre au dimanche 20 décembre');
+});

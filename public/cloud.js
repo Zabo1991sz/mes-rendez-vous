@@ -30,12 +30,24 @@
   var CURSOR_MARGIN_MS = 10 * 60 * 1000; // relit les 10 dernières minutes (horloges un peu décalées)
 
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
-  function canon(a) { return JSON.stringify(FIELDS.filter(function (k) { return k !== 'updatedAt'; }).map(function (k) { return a[k]; })); }
+  function canon(a) {
+    return JSON.stringify(FIELDS.filter(function (k) { return k !== 'updatedAt'; }).map(function (k) { return a[k]; })
+      .concat([a.endDate || '']));
+  }
+  // Dernier jour concerné (fin d'une période, sinon la date)
+  function lastDay(a) { return a.endDate && a.endDate > a.date ? a.endDate : a.date; }
 
   // ---------- Format Firestore ----------
+  // Les règles Firestore n'acceptent que les champs de FIELDS. Une période (vacances…) n'a pas d'heure :
+  // sa date de fin voyage donc dans le champ « time », sous la forme « fin:AAAA-MM-JJ » (+ « HH:MM » si une heure est donnée).
+  var END_PREFIX = 'fin:';
+
   function encode(item) {
     var f = {};
     FIELDS.forEach(function (k) { if (typeof item[k] === 'string') f[k] = { stringValue: item[k] }; });
+    if (typeof item.endDate === 'string' && item.endDate) {
+      f.time = { stringValue: END_PREFIX + item.endDate + (item.time ? ' ' + item.time : '') };
+    }
     if (item.deleted) f.deleted = { booleanValue: true };
     return { fields: f };
   }
@@ -43,6 +55,11 @@
   function decode(doc) {
     var f = (doc && doc.fields) || {}, out = {};
     FIELDS.forEach(function (k) { if (f[k] && typeof f[k].stringValue === 'string') out[k] = f[k].stringValue; });
+    if (typeof out.time === 'string' && out.time.indexOf(END_PREFIX) === 0) {
+      var packed = out.time.slice(END_PREFIX.length).split(' ');
+      out.endDate = packed[0];
+      out.time = packed[1] || '';
+    }
     if (f.deleted && f.deleted.booleanValue === true) out.deleted = true;
     if (!out.id && doc && typeof doc.name === 'string') out.id = doc.name.split('/').pop();
     return out;
@@ -61,7 +78,7 @@
       if (!p || canon(p) !== canon(a)) { a.updatedAt = nowIso; out.push(clone(a)); }
     });
     Object.keys(prev).forEach(function (id) {
-      if (keepFrom && prev[id].date < keepFrom) return; // nettoyage automatique des vieux rendez-vous
+      if (keepFrom && lastDay(prev[id]) < keepFrom) return; // nettoyage automatique des vieux rendez-vous
       out.push({ id: id, deleted: true, updatedAt: nowIso });
     });
     return out;
@@ -94,7 +111,7 @@
       var c = B.clean(r);
       if (!c) return;
       if (!l) {
-        if (keepFrom && c.date < keepFrom) return; // trop ancien : on ne le remet pas sur l'appareil
+        if (keepFrom && lastDay(c) < keepFrom) return; // trop ancien : on ne le remet pas sur l'appareil
         index[c.id] = result.length;
         result.push(c);
         changed = true;

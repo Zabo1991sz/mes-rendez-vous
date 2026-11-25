@@ -41,6 +41,7 @@ Bouton « 💾 Sauvegarde » en bas de la liste :
 
 - Connexion une seule fois par appareil : « 💾 Sauvegarde » → « Sauvegarde en ligne » → e-mail et mot de passe du compte créé dans Firebase Authentication. La connexion reste active.
 - Tout est d'abord enregistré sur l'appareil ; les changements partent dès qu'Internet est disponible. Les changements faits ailleurs arrivent toutes les 2 minutes (et à l'ouverture de l'appli).
+- Périodes (vacances…) : la date de fin est envoyée dans le champ `time` sous la forme `fin:AAAA-MM-JJ` (suivie de l'heure s'il y en a une), pour rester dans les champs autorisés par `firestore.rules`.
 - En cas de modification des deux côtés, la plus récente gagne. Une suppression est envoyée comme une marque « supprimé ».
 - Un ⚠️ apparaît sur le bouton « Sauvegarde » si la connexion a expiré ou si rien n'a pu être envoyé depuis 2 jours.
 - Sécurité : la configuration Firebase dans `app.js` n'est pas secrète. L'accès est limité au compte de la famille par les règles `firestore.rules` (à coller dans la console Firebase : Firestore → Règles → Publier), et la création de comptes est désactivée.

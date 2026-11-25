@@ -31,6 +31,8 @@
     if (typeof a.said === 'string') out.said = a.said.slice(0, 1000);
     if (typeof a.createdAt === 'string') out.createdAt = a.createdAt;
     if (typeof a.note === 'string' && a.note) out.note = a.note.slice(0, 5000);
+    // fin d'une période (vacances…) : seulement si elle est après le début
+    if (typeof a.endDate === 'string' && DATE_RE.test(a.endDate) && a.endDate > a.date) out.endDate = a.endDate;
     if (typeof a.updatedAt === 'string') out.updatedAt = a.updatedAt;
     return out;
   }

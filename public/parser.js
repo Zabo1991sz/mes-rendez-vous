@@ -59,6 +59,12 @@
   var RE_FULL = new RegExp('(?:\\b(?:pour\\s+)?(?:le|ce)\\s+)?(?:\\b(' + WD + ')\\s+)?(?:\\ble\\s+)?\\b' + DAY_NUM +
     '\\s+(' + MO + ')(?:\\s+(\\d{4}))?\\b');
   var RE_NUMERIC = /(?:\b(?:pour\s+)?le\s+)?\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?(?!\d)/;
+  // Périodes : « du 1er septembre au 20 septembre », « du 1er au 20 septembre », « du 1/9 au 20/9 »
+  var RANGE_SEP = "\\s+(?:au|jusqu'?\\s?au)\\s+";
+  var RE_RANGE = new RegExp('\\b(?:du|depuis\\s+le)\\s+(?:(' + WD + ')\\s+)?' + DAY_NUM + '(?:\\s+(' + MO + '))?(?:\\s+(\\d{4}))?' +
+    RANGE_SEP + '(?:le\\s+)?(?:(' + WD + ')\\s+)?' + DAY_NUM + '\\s+(' + MO + ')(?:\\s+(\\d{4}))?\\b');
+  var RE_RANGE_NUM = new RegExp('\\b(?:du|depuis\\s+le)\\s+(\\d{1,2})[\\/.](\\d{1,2})(?:[\\/.](\\d{2,4}))?' +
+    RANGE_SEP + '(?:le\\s+)?(\\d{1,2})[\\/.](\\d{1,2})(?:[\\/.](\\d{2,4}))?(?!\\d)');
   var RE_REL = /\b(?:pour\s+)?(apres[- ]?demain|demain|aujourd'?\s?hui)\b/;
   var RE_IN = new RegExp('\\bdans\\s+(\\d{1,2}|' + wordsPattern(31) + ')\\s+(jours?|semaines?)\\b');
   var RE_WEEKDAY = new RegExp('(?:\\b(?:pour\\s+)?(?:le|ce)\\s+)?\\b(' + WD + ')\\b(?:\\s+(prochain|qui vient))?');
@@ -121,9 +127,40 @@
       if (pm[1] === 'ce' || pm[1] === 'cet') date = new Date(today);
     }
 
+    // Période (début et fin) — elle a priorité sur une date seule
+    var endDate = null;
+    function setRange(d1, m1, y1, d2, m2, y2) {
+      if (y1 !== null && y1 < 100) y1 += 2000;
+      if (y2 !== null && y2 < 100) y2 += 2000;
+      var ey = y2 === null ? today.getFullYear() : y2;
+      var end = new Date(ey, m2, d2);
+      if (isNaN(d2) || m2 < 0 || m2 > 11 || end.getMonth() !== m2 || end.getDate() !== d2) {
+        warnings.push("La date de fin n'existe pas. Merci de la corriger.");
+        return;
+      }
+      if (y2 === null && end < today) { ey += 1; end = new Date(ey, m2, d2); }
+      var sy = y1 === null ? ey : y1;
+      var start = new Date(sy, m1, d1);
+      if (isNaN(d1) || m1 < 0 || m1 > 11 || start.getMonth() !== m1 || start.getDate() !== d1) {
+        warnings.push("La date de début n'existe pas. Merci de la corriger.");
+        return;
+      }
+      if (y1 === null && start > end) start = new Date(sy - 1, m1, d1); // « du 28 décembre au 3 janvier »
+      if (start > end) warnings.push('La date de fin est avant la date de début. Vérifiez les dates.');
+      date = start;
+      endDate = end;
+    }
+
     // Date
     var m;
-    if ((m = w.take(RE_FULL))) {
+    if ((m = w.take(RE_RANGE))) {
+      var mEnd = MONTHS.indexOf(m[7]);
+      setRange(parseNum(m[2]), m[3] ? MONTHS.indexOf(m[3]) : mEnd, m[4] ? parseInt(m[4], 10) : null,
+        parseNum(m[6]), mEnd, m[8] ? parseInt(m[8], 10) : null);
+    } else if ((m = w.take(RE_RANGE_NUM))) {
+      setRange(parseInt(m[1], 10), parseInt(m[2], 10) - 1, m[3] ? parseInt(m[3], 10) : null,
+        parseInt(m[4], 10), parseInt(m[5], 10) - 1, m[6] ? parseInt(m[6], 10) : null);
+    } else if ((m = w.take(RE_FULL))) {
       var day = parseNum(m[2]), month = MONTHS.indexOf(m[3]);
       var year = m[4] ? parseInt(m[4], 10) : today.getFullYear();
       var d = new Date(year, month, day);
@@ -197,6 +234,8 @@
 
     return {
       date: date ? toIso(date) : null,
+      // fin d'une période (vacances…) ; null pour un rendez-vous d'un seul jour
+      endDate: date && endDate && endDate > date ? toIso(endDate) : null,
       time: time,
       motif: motif,
       title: title,
@@ -234,6 +273,12 @@
     return opts.weekday === false ? s : cap(s);
   }
 
+  // « Du mardi 1er septembre au dimanche 20 septembre »
+  function formatRange(start, end, opts) {
+    function lower(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
+    return 'Du ' + lower(formatDate(start, opts)) + ' au ' + lower(formatDate(end, opts));
+  }
+
   function formatTime(t) {
     if (!t) return '';
     var p = t.split(':'), h = +p[0], mi = +p[1];
@@ -250,6 +295,7 @@
   return {
     parse: parse,
     formatDate: formatDate,
+    formatRange: formatRange,
     formatTime: formatTime,
     spokenTime: spokenTime,
     toIso: toIso,

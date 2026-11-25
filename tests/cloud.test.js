@@ -261,3 +261,25 @@ test('sans connexion, rien n’est mis en attente', () => {
   c.enqueue([{ ...A, updatedAt: NOW }]);
   assert.strictEqual(c.pending(), 0);
 });
+
+test('période (vacances) : la date de fin voyage dans « time » et revient intacte', () => {
+  const v = { id: 'v1', date: '2026-12-01', endDate: '2026-12-20', time: '', title: 'Vacances', updatedAt: NOW };
+  const doc = C.encode(v);
+  assert.deepStrictEqual(Object.keys(doc.fields).sort(), ['date', 'id', 'time', 'title', 'updatedAt']);
+  assert.strictEqual(doc.fields.time.stringValue, 'fin:2026-12-20');
+  assert.deepStrictEqual(C.decode(doc), v);
+  const cure = { ...v, id: 'c1', time: '09:00', title: 'Cure' };
+  assert.deepStrictEqual(C.decode(C.encode(cure)), cure);
+});
+
+test('période : modifier la date de fin est bien un changement à envoyer', () => {
+  const v = { id: 'v1', date: '2026-12-01', endDate: '2026-12-20', time: '', title: 'Vacances' };
+  const out = C.diff([{ ...v }], [{ ...v, endDate: '2026-12-22' }], NOW, KEEP);
+  assert.deepStrictEqual(out.map((x) => x.endDate), ['2026-12-22']);
+});
+
+test('période en cours : pas considérée comme trop ancienne tant qu\'elle n\'est pas finie', () => {
+  const v = { id: 'v1', date: '2026-10-01', endDate: '2026-12-20', time: '', title: 'Cure', updatedAt: NOW };
+  const r = C.reconcile([], {}, [v], KEEP, false, NOW);
+  assert.deepStrictEqual(r.appointments.map((a) => a.id), ['v1']);
+});

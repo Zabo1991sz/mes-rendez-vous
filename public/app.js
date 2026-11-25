@@ -91,16 +91,28 @@
     var ta = a.time || '99:99', tb = b.time || '99:99';
     return ta < tb ? -1 : ta > tb ? 1 : 0;
   }
+  // Périodes (vacances…) : un rendez-vous peut avoir une date de fin (endDate)
+  function isRange(a) { return !!(a.endDate && a.endDate > a.date); }
+  function lastDay(a) { return isRange(a) ? a.endDate : a.date; }
+  function covers(a, iso) { return a.date <= iso && iso <= lastDay(a); }
+  function isOngoing(a) { var t = todayIso(); return isRange(a) && a.date <= t && t <= a.endDate; }
+  // « Mardi 17 novembre à 10 h » ou « Du mardi 1er au dimanche 20 septembre »
+  function whenText(a, opts) {
+    return (isRange(a) ? P.formatRange(a.date, a.endDate, opts) : P.formatDate(a.date, opts)) +
+      (a.time ? ' à ' + P.formatTime(a.time) : '');
+  }
   function upcoming() {
     var t = todayIso();
-    return appts.filter(function (a) { return a.date >= t; }).sort(compare);
+    return appts.filter(function (a) { return lastDay(a) >= t; }).sort(compare);
   }
   function purgeOld() {
     var limit = keepFrom(), n = appts.length;
-    appts = appts.filter(function (a) { return a.date >= limit; });
+    appts = appts.filter(function (a) { return lastDay(a) >= limit; });
     if (appts.length !== n) persist();
   }
-  function isPast(a) { return a.date === todayIso() && a.time && a.time < nowHHMM(); }
+  function isPast(a) { return !isRange(a) && a.date === todayIso() && a.time && a.time < nowHHMM(); }
+  function untilText(a) { return "jusqu'au " + P.formatDate(a.endDate, { weekday: false }); }
+  function apptRel(a) { return isOngoing(a) ? 'En cours — ' + untilText(a) : relLabel(a.date); }
 
   function relLabel(iso) {
     var t = todayIso();
@@ -142,15 +154,19 @@
     var todayHoliday = H.nameOf(P.toIso(now));
     $('lockDate').textContent = P.formatDate(P.toIso(now)) + (todayHoliday ? ' — ' + todayHoliday : '');
 
-    var next = upcoming().filter(function (a) { return !isPast(a); })[0];
+    var soon = upcoming().filter(function (a) { return !isPast(a); });
+    var ongoing = soon.filter(isOngoing)[0];
+    var next = soon.filter(function (a) { return !isOngoing(a); })[0];
     var box = $('lockNext');
+    var html = '';
+    if (ongoing) html += 'En ce moment :<strong>' + esc(ongoing.title) + ' — ' + esc(untilText(ongoing)) + '</strong>';
     if (next) {
-      box.innerHTML = 'Prochain rendez-vous :<strong>' + esc(relLabel(next.date)) +
-        (next.time ? ' à ' + esc(P.formatTime(next.time)) : '') + ' — ' + esc(next.title) + '</strong>';
-      box.classList.remove('hidden');
-    } else {
-      box.classList.add('hidden');
+      html += (html ? '<span class="lock-sep"></span>' : '') + 'Prochain rendez-vous :<strong>' +
+        esc(isRange(next) ? relLabel(next.date) + ' (' + whenText(next).replace(/^Du/, 'du') + ')' : relLabel(next.date)) +
+        (next.time && !isRange(next) ? ' à ' + esc(P.formatTime(next.time)) : '') + ' — ' + esc(next.title) + '</strong>';
     }
+    box.innerHTML = html;
+    box.classList.toggle('hidden', !html);
   }
 
   function showLock() {
@@ -184,6 +200,13 @@
     }
 
     var html = '', nextDone = false, laterShown = false;
+    // Périodes en cours (vacances…) d'abord, à part : elles ne prennent pas la place du prochain rendez-vous
+    var ongoing = list.filter(isOngoing);
+    if (ongoing.length) {
+      html += '<div class="next-label range-label">En ce moment</div>';
+      ongoing.forEach(function (a) { html += cardHtml(a, false); });
+      list = list.filter(function (a) { return !isOngoing(a); });
+    }
     list.forEach(function (a) {
       var past = isPast(a);
       var isNext = false;
@@ -203,22 +226,23 @@
   // Carte d'un rendez-vous (liste et vue « jour »)
   function cardHtml(a, isNext) {
     var t = todayIso();
-    var dayPast = a.date < t;
+    var dayPast = lastDay(a) < t;
     var past = dayPast || isPast(a);
-    var rel = dayPast ? 'Passé' : relLabel(a.date);
+    var rel = dayPast ? 'Passé' : apptRel(a);
     var cls = 'card' + (isNext ? ' is-next' : '');
     var badgeCls = 'badge';
     if (past) { cls += ' is-past'; badgeCls += ' past'; if (!dayPast) rel = "Aujourd'hui — déjà passé"; }
     else if (a.date === t) { cls += ' is-today'; badgeCls += ' today'; }
     else if (a.date === addDays(t, 1)) { cls += ' is-tomorrow'; badgeCls += ' tomorrow'; }
+    if (isRange(a)) { cls += ' is-range'; if (isOngoing(a)) badgeCls = 'badge range'; }
 
     return '<article class="' + cls + '" data-rdv="' + esc(a.id) + '">' +
       '<div class="' + badgeCls + '">' + esc(rel) + '</div>' +
-      '<div class="card-date">' + esc(P.formatDate(a.date)) + '</div>' +
-      (H.nameOf(a.date) ? '<div class="holiday-tag">Jour férié : ' + esc(H.nameOf(a.date)) + '</div>' : '') +
+      '<div class="card-date">' + esc(isRange(a) ? P.formatRange(a.date, a.endDate) : P.formatDate(a.date)) + '</div>' +
+      (!isRange(a) && H.nameOf(a.date) ? '<div class="holiday-tag">Jour férié : ' + esc(H.nameOf(a.date)) + '</div>' : '') +
       (a.time
         ? '<div class="card-time">🕙 ' + esc(P.formatTime(a.time)) + '</div>'
-        : '<div class="card-time muted">Heure non précisée</div>') +
+        : isRange(a) ? '' : '<div class="card-time muted">Heure non précisée</div>') +
       '<div class="card-title">' + esc(a.title) + '</div>' +
       '<div class="card-actions">' +
       (a.note
@@ -256,7 +280,7 @@
     var a = appts.filter(function (x) { return x.id === id; })[0];
     if (!a) return;
     askConfirm('Supprimer ce rendez-vous ?',
-      a.title + '<br>' + P.formatDate(a.date) + (a.time ? ' à ' + P.formatTime(a.time) : ''),
+      a.title + '<br>' + whenText(a),
       function () {
         appts = appts.filter(function (x) { return x.id !== id; });
         persist();
@@ -294,7 +318,16 @@
     $('calToday').classList.toggle('hidden', isCurrent);
 
     var counts = {};
-    appts.forEach(function (a) { counts[a.date] = (counts[a.date] || 0) + 1; });
+    var ranges = {};
+    var monthStart = cal.year + '-' + pad(cal.month + 1) + '-01';
+    var monthEnd = cal.year + '-' + pad(cal.month + 1) + '-31';
+    appts.forEach(function (a) {
+      if (!isRange(a)) { counts[a.date] = (counts[a.date] || 0) + 1; return; }
+      if (a.endDate < monthStart || a.date > monthEnd) return;
+      for (var dd = a.date < monthStart ? monthStart : a.date; dd <= a.endDate && dd <= monthEnd; dd = addDays(dd, 1)) {
+        if (!ranges[dd]) ranges[dd] = a.title;
+      }
+    });
 
     var offset = (new Date(cal.year, cal.month, 1).getDay() + 6) % 7; // semaine commençant le lundi
     var nbDays = new Date(cal.year, cal.month + 1, 0).getDate();
@@ -309,9 +342,14 @@
       if (n) cls += ' has-rdv';
       var hol = H.nameOf(iso);
       if (hol) cls += ' is-holiday';
+      var rg = ranges[iso];
+      if (rg) cls += ' has-range';
+      var tip = [hol, rg].filter(Boolean).join(' — ');
       html += '<button type="button" class="' + cls + '" data-date="' + iso + '"' +
-        (hol ? ' title="' + esc(hol) + '"' : '') + '>' + d +
-        (n ? '<span class="cal-count">' + n + ' rdv</span>' : hol ? '<span class="cal-hol">férié</span>' : '') + '</button>';
+        (tip ? ' title="' + esc(tip) + '"' : '') + '>' + d +
+        (n ? '<span class="cal-count">' + n + ' rdv</span>'
+          : rg ? '<span class="cal-range">' + esc(rg) + '</span>'
+          : hol ? '<span class="cal-hol">férié</span>' : '') + '</button>';
     }
     $('calGrid').innerHTML = html;
   }
@@ -346,7 +384,7 @@
     var hol = H.nameOf(dayIso);
     $('dayHoliday').textContent = hol ? 'Jour férié : ' + hol : '';
     $('dayHoliday').classList.toggle('hidden', !hol);
-    var list = appts.filter(function (a) { return a.date === dayIso; }).sort(compare);
+    var list = appts.filter(function (a) { return covers(a, dayIso); }).sort(compare);
     $('dayList').innerHTML = list.length
       ? list.map(function (a) { return cardHtml(a, false); }).join('')
       : '<div class="day-empty">Aucun rendez-vous ce jour-là.</div>';
@@ -404,7 +442,7 @@
     if (!a) return;
     noteId = id;
     noteOriginal = a.note || '';
-    $('noteFor').textContent = a.title + ' — ' + P.formatDate(a.date) + (a.time ? ' à ' + P.formatTime(a.time) : '');
+    $('noteFor').textContent = a.title + ' — ' + whenText(a);
     $('noteText').value = noteOriginal;
     $('noteDelete').classList.toggle('hidden', !noteOriginal);
     $('noteTitle').textContent = noteOriginal ? 'Note' : 'Ajouter une note';
@@ -832,7 +870,7 @@
   function openVerify(text) {
     cancelListening();
     var r = P.parse(text, new Date(), { defaultDate: voiceDate });
-    pending = { date: r.date, time: r.time, title: r.title, transcript: text, warnings: r.warnings };
+    pending = { date: r.date, endDate: r.endDate, time: r.time, title: r.title, transcript: text, warnings: r.warnings };
     $('verifyTitle').textContent = 'Est-ce bien correct ?';
     $('vRetry').classList.remove('hidden');
     hideOverlay('voice');
@@ -840,7 +878,7 @@
     toggleEdit(!r.date);
     renderVerify();
     if (r.date) {
-      speak(pending.title + ', ' + P.formatDate(r.date) +
+      speak(pending.title + ', ' + (r.endDate ? P.formatRange(r.date, r.endDate) : P.formatDate(r.date)) +
         (r.time ? ', à ' + P.spokenTime(r.time) : '') + '. Est-ce correct ?');
     } else {
       speak("Je n'ai pas compris la date. Merci de la choisir.");
@@ -852,29 +890,33 @@
     $('vSaid').textContent = p.transcript ? 'Vous avez dit : « ' + p.transcript + ' »' : '';
 
     var vDate = $('vDate');
-    vDate.textContent = p.date ? P.formatDate(p.date, { year: true }) : 'Date non comprise';
+    vDate.textContent = !p.date ? 'Date non comprise'
+      : p.endDate ? P.formatRange(p.date, p.endDate, { year: true }) : P.formatDate(p.date, { year: true });
     vDate.classList.toggle('missing', !p.date);
 
     var vTime = $('vTime');
-    vTime.textContent = p.time ? P.formatTime(p.time) : 'Non précisée';
-    vTime.classList.toggle('missing', !p.time);
+    vTime.textContent = p.time ? P.formatTime(p.time) : p.endDate ? 'Toute la période' : 'Non précisée';
+    vTime.classList.toggle('missing', !p.time && !p.endDate);
 
     $('vTitle').textContent = p.title || 'Rendez-vous';
 
     var warnings = p.warnings.slice();
-    if (p.date && p.date < todayIso()) warnings.push('Attention : cette date est déjà passée.');
-    if (p.date && H.nameOf(p.date)) {
+    var badRange = !!(p.date && p.endDate && p.endDate < p.date);
+    if (badRange) warnings.push('La date de fin est avant la date de début. Merci de la corriger.');
+    if (p.date && (p.endDate || p.date) < todayIso()) warnings.push('Attention : cette date est déjà passée.');
+    if (p.date && !p.endDate && H.nameOf(p.date)) {
       warnings.push("Attention : c'est un jour férié (" + H.nameOf(p.date) + '). Vérifiez que le rendez-vous a bien lieu ce jour-là.');
     }
     $('vWarnings').innerHTML = warnings.map(function (w) { return '<div class="warn">⚠️ ' + esc(w) + '</div>'; }).join('');
 
-    $('vSave').disabled = !p.date;
+    $('vSave').disabled = !p.date || badRange;
   }
 
   function toggleEdit(show) {
     var box = $('editBox');
     if (show) {
       $('eDate').value = pending.date || '';
+      $('eEndDate').value = pending.endDate || '';
       $('eTime').value = pending.time || '';
       $('eTitle').value = pending.title || '';
       box.classList.remove('hidden');
@@ -888,12 +930,14 @@
   function onEditChange() {
     if (!pending) return;
     pending.date = $('eDate').value || null;
+    pending.endDate = $('eEndDate').value || null;
+    if (pending.endDate && pending.endDate === pending.date) pending.endDate = null;
     pending.time = $('eTime').value || null;
     pending.title = $('eTitle').value.trim() || 'Rendez-vous';
     pending.warnings = pending.date ? [] : ['Merci de choisir la date.'];
     renderVerify();
   }
-  ['eDate', 'eTime', 'eTitle'].forEach(function (id) {
+  ['eDate', 'eEndDate', 'eTime', 'eTitle'].forEach(function (id) {
     $(id).addEventListener('input', onEditChange);
     $(id).addEventListener('change', onEditChange);
   });
@@ -908,7 +952,7 @@
     if (!a) return;
     stopSpeaking();
     cancelListening();
-    pending = { editId: id, date: a.date, time: a.time || null, title: a.title, transcript: '', warnings: [] };
+    pending = { editId: id, date: a.date, endDate: isRange(a) ? a.endDate : null, time: a.time || null, title: a.title, transcript: '', warnings: [] };
     $('verifyTitle').textContent = 'Modifier le rendez-vous';
     $('vRetry').classList.add('hidden');
     showOverlay('verify');
@@ -919,12 +963,14 @@
   function saveEdit() {
     var a = findAppt(pending.editId);
     if (!a) { pending = null; hideOverlay('verify'); toast("Ce rendez-vous n'existe plus"); return; }
-    var old = { date: a.date, time: a.time, title: a.title };
+    var old = { date: a.date, endDate: a.endDate, time: a.time, title: a.title };
     a.date = pending.date;
+    if (pending.endDate) a.endDate = pending.endDate; else delete a.endDate;
     a.time = pending.time || '';
     a.title = pending.title || 'Rendez-vous';
     if (!persist()) {
       a.date = old.date; a.time = old.time; a.title = old.title;
+      if (old.endDate) a.endDate = old.endDate; else delete a.endDate;
       toast("Erreur : la modification n'a pas pu être enregistrée");
       return;
     }
@@ -953,6 +999,7 @@
       said: pending.transcript || '',
       createdAt: new Date().toISOString()
     };
+    if (pending.endDate) item.endDate = pending.endDate;
     appts.push(item);
     if (!persist()) {
       appts.pop();
