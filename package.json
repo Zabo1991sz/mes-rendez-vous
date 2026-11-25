@@ -5,6 +5,6 @@
   "description": "Application tablette simple pour noter et afficher ses rendez-vous à la voix",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/parser.test.js tests/backup.test.js tests/cloud.test.js"
+    "test": "node --test tests/parser.test.js tests/backup.test.js tests/cloud.test.js tests/holidays.test.js"
   }
 }

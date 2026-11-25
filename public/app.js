@@ -25,6 +25,7 @@
   var FULL_SYNC_EVERY_MS = 6 * 3600 * 1000; // vérification complète toutes les 6 heures
 
   var P = window.RdvParser;
+  var H = window.RdvHolidays;
   var B = window.RdvBackup;
   var C = window.RdvCloud;
   var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -138,7 +139,8 @@
     $('lock').classList.toggle('night', h >= CONFIG.nightFrom || h < CONFIG.nightUntil);
     $('lockGreeting').textContent = hello + (CONFIG.name ? ' ' + CONFIG.name : '');
     $('lockTime').textContent = pad(h) + ':' + pad(now.getMinutes());
-    $('lockDate').textContent = P.formatDate(P.toIso(now));
+    var todayHoliday = H.nameOf(P.toIso(now));
+    $('lockDate').textContent = P.formatDate(P.toIso(now)) + (todayHoliday ? ' — ' + todayHoliday : '');
 
     var next = upcoming().filter(function (a) { return !isPast(a); })[0];
     var box = $('lockNext');
@@ -213,6 +215,7 @@
     return '<article class="' + cls + '" data-rdv="' + esc(a.id) + '">' +
       '<div class="' + badgeCls + '">' + esc(rel) + '</div>' +
       '<div class="card-date">' + esc(P.formatDate(a.date)) + '</div>' +
+      (H.nameOf(a.date) ? '<div class="holiday-tag">Jour férié : ' + esc(H.nameOf(a.date)) + '</div>' : '') +
       (a.time
         ? '<div class="card-time">🕙 ' + esc(P.formatTime(a.time)) + '</div>'
         : '<div class="card-time muted">Heure non précisée</div>') +
@@ -304,8 +307,11 @@
       if (iso < t) cls += ' is-past';
       if (iso === t) cls += ' is-today';
       if (n) cls += ' has-rdv';
-      html += '<button type="button" class="' + cls + '" data-date="' + iso + '">' + d +
-        (n ? '<span class="cal-count">' + n + ' rdv</span>' : '') + '</button>';
+      var hol = H.nameOf(iso);
+      if (hol) cls += ' is-holiday';
+      html += '<button type="button" class="' + cls + '" data-date="' + iso + '"' +
+        (hol ? ' title="' + esc(hol) + '"' : '') + '>' + d +
+        (n ? '<span class="cal-count">' + n + ' rdv</span>' : hol ? '<span class="cal-hol">férié</span>' : '') + '</button>';
     }
     $('calGrid').innerHTML = html;
   }
@@ -337,6 +343,9 @@
     var t = todayIso();
     var rel = dayIso === t ? "Aujourd'hui — " : dayIso === addDays(t, 1) ? 'Demain — ' : '';
     $('dayTitle').textContent = rel + P.formatDate(dayIso);
+    var hol = H.nameOf(dayIso);
+    $('dayHoliday').textContent = hol ? 'Jour férié : ' + hol : '';
+    $('dayHoliday').classList.toggle('hidden', !hol);
     var list = appts.filter(function (a) { return a.date === dayIso; }).sort(compare);
     $('dayList').innerHTML = list.length
       ? list.map(function (a) { return cardHtml(a, false); }).join('')
@@ -854,6 +863,9 @@
 
     var warnings = p.warnings.slice();
     if (p.date && p.date < todayIso()) warnings.push('Attention : cette date est déjà passée.');
+    if (p.date && H.nameOf(p.date)) {
+      warnings.push("Attention : c'est un jour férié (" + H.nameOf(p.date) + '). Vérifiez que le rendez-vous a bien lieu ce jour-là.');
+    }
     $('vWarnings').innerHTML = warnings.map(function (w) { return '<div class="warn">⚠️ ' + esc(w) + '</div>'; }).join('');
 
     $('vSave').disabled = !p.date;

@@ -1,7 +1,7 @@
 ﻿// Permet à l'appli de s'ouvrir même sans Internet.
 // Stratégie « réseau d'abord » : les mises à jour arrivent dès que la tablette est connectée.
-var CACHE = 'rdv-v10';
-var ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'parser.js', 'backup.js', 'cloud.js', 'manifest.webmanifest',
+var CACHE = 'rdv-v11';
+var ASSETS = ['./', 'index.html', 'styles.css', 'app.js', 'parser.js', 'holidays.js', 'backup.js', 'cloud.js', 'manifest.webmanifest',
   'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', function (e) {

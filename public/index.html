@@ -66,6 +66,7 @@
   <section id="day" class="overlay hidden">
     <div class="overlay-inner">
       <h2 id="dayTitle"></h2>
+      <div class="day-holiday hidden" id="dayHoliday"></div>
       <div id="dayList"></div>
       <button class="btn btn-yes" id="dayAdd" type="button">+ Ajouter un rendez-vous ce jour-là</button>
       <button class="btn btn-secondary" id="dayBack" type="button">◀ Retour au calendrier</button>
@@ -210,6 +211,7 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script src="parser.js"></script>
+  <script src="holidays.js"></script>
   <script src="backup.js"></script>
   <script src="cloud.js"></script>
   <script src="app.js"></script>

@@ -114,7 +114,7 @@ button { font-family: inherit; cursor: pointer; }
 /* Écran large mais pas très haut (tablette en paysage) : pastille à côté du numéro */
 @media (min-width: 700px) and (max-height: 760px) {
   .cal-day { flex-direction: row; }
-  .cal-count { margin: 0 0 0 8px; }
+  .cal-count, .cal-hol { margin: 0 0 0 8px; }
 }
 /* Écran peu haut : en-tête du calendrier plus compact pour laisser la place aux cases */
 @media (max-height: 640px) {
@@ -127,6 +127,18 @@ button { font-family: inherit; cursor: pointer; }
   #calClose { margin-top: 10px; padding: 14px; }
 }
 .cal-day.is-past .cal-count { background: #9AA7BD; }
+/* Jours fériés (canton de Vaud) */
+.cal-day.is-holiday { color: #B3261E; background: #FDECEA; border-color: #F0B8B3; }
+.cal-day.is-holiday.is-past { color: #C98F8A; background: #F8EFEC; }
+.cal-hol {
+  margin-top: 4px; font-size: .8rem; line-height: 1.2; font-weight: 700; color: #B3261E;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.holiday-tag { font-size: 1.1rem; font-weight: 700; color: #B3261E; margin: 2px 0 4px; }
+.day-holiday {
+  display: inline-block; font-size: 1.4rem; font-weight: 700; color: #B3261E; background: #FDECEA;
+  border-radius: 14px; padding: 8px 16px; margin: -8px 0 14px;
+}
 .cal-hint { text-align: center; color: var(--muted); font-size: 1.15rem; margin-top: 14px; }
 
 #dayList { text-align: left; }
@@ -347,6 +359,7 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
     font-size: 1.15rem; padding: 0 2px; border-radius: 10px;
   }
   .cal-count { margin: 0 0 0 6px; font-size: .7rem; padding: 2px 6px; }
+  .cal-hol { margin: 0 0 0 6px; font-size: .65rem; }
   .cal-hint { display: none; }
   #calClose { margin-top: 10px; padding: 12px; font-size: 1.2rem; }
 
@@ -396,4 +409,5 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
   .cal-grid { grid-gap: 4px; gap: 4px; }
   .cal-day { min-height: 0; font-size: 1.2rem; padding: 6px 1px; border-radius: 10px; }
   .cal-count { font-size: .7rem; padding: 2px 5px; }
+  .cal-hol { font-size: .6rem; letter-spacing: 0; }
 }
