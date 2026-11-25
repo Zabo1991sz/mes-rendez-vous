@@ -907,6 +907,23 @@
     if (p.date && !p.endDate && H.nameOf(p.date)) {
       warnings.push("Attention : c'est un jour férié (" + H.nameOf(p.date) + '). Vérifiez que le rendez-vous a bien lieu ce jour-là.');
     }
+    // Rendez-vous pendant une période (vacances…) déjà notée, ou période qui contient des rendez-vous
+    if (p.date && !badRange) {
+      var others = appts.filter(function (a) { return a.id !== p.editId; });
+      if (!p.endDate) {
+        others.filter(function (a) { return isRange(a) && covers(a, p.date); }).forEach(function (a) {
+          warnings.push('Attention : ce jour-là, il y a « ' + a.title + ' » (' +
+            P.formatRange(a.date, a.endDate).replace(/^Du/, 'du') + '). Vérifiez que le rendez-vous est bien prévu à cette date.');
+        });
+      } else {
+        var inside = others.filter(function (a) { return !isRange(a) && a.date >= p.date && a.date <= p.endDate; });
+        if (inside.length) {
+          warnings.push('Attention : ' + (inside.length === 1 ? 'un rendez-vous est' : inside.length + ' rendez-vous sont') +
+            ' déjà prévu' + (inside.length === 1 ? '' : 's') + ' pendant cette période : ' +
+            inside.sort(compare).map(function (a) { return a.title + ' (' + P.formatDate(a.date, { weekday: false }) + ')'; }).join(', ') + '.');
+        }
+      }
+    }
     $('vWarnings').innerHTML = warnings.map(function (w) { return '<div class="warn">⚠️ ' + esc(w) + '</div>'; }).join('');
 
     $('vSave').disabled = !p.date || badRange;
