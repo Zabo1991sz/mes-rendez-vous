@@ -9,7 +9,9 @@
   // ---------- Réglages ----------
   var CONFIG = {
     name: 'Marianna',            // prénom affiché sur l'écran de veille ('' pour aucun)
-    lockAfterMs: 2 * 60 * 1000,  // retour à l'écran de veille après 2 minutes sans toucher
+    lockAfterMs: 45 * 1000,      // retour à l'écran de veille après 45 secondes sans toucher l'écran
+    lockBusyMs: 3 * 60 * 1000,   // … ou 3 minutes si une saisie est ouverte (dictée, vérification, note)
+    minListenMs: 10 * 1000,      // le micro reste ouvert au moins 10 secondes avant « Je n'ai rien entendu »
     speakBack: true,             // relire le rendez-vous à voix haute avant validation
     nightFrom: 21,               // écran de veille sombre à partir de 21 h…
     nightUntil: 7                // … et jusqu'à 7 h
@@ -97,7 +99,7 @@
   function covers(a, iso) { return a.date <= iso && iso <= lastDay(a); }
   function isOngoing(a) { var t = todayIso(); return isRange(a) && a.date <= t && t <= a.endDate; }
   // « Mardi 17 novembre à 10 h » ou « Du mardi 1er au dimanche 20 septembre »
-  function whenText(a, opts) {
+  function apptWhen(a, opts) {
     return (isRange(a) ? P.formatRange(a.date, a.endDate, opts) : P.formatDate(a.date, opts)) +
       (a.time ? ' à ' + P.formatTime(a.time) : '');
   }
@@ -162,7 +164,7 @@
     if (ongoing) html += 'En ce moment :<strong>' + esc(ongoing.title) + ' — ' + esc(untilText(ongoing)) + '</strong>';
     if (next) {
       html += (html ? '<span class="lock-sep"></span>' : '') + 'Prochain rendez-vous :<strong>' +
-        esc(isRange(next) ? relLabel(next.date) + ' (' + whenText(next).replace(/^Du/, 'du') + ')' : relLabel(next.date)) +
+        esc(isRange(next) ? relLabel(next.date) + ' (' + apptWhen(next).replace(/^Du/, 'du') + ')' : relLabel(next.date)) +
         (next.time && !isRange(next) ? ' à ' + esc(P.formatTime(next.time)) : '') + ' — ' + esc(next.title) + '</strong>';
     }
     box.innerHTML = html;
@@ -184,6 +186,7 @@
     window.scrollTo(0, 0);
     requestWakeLock();
     resetIdle();
+    syncNow(false);
   }
 
   // ---------- Liste ----------
@@ -280,7 +283,7 @@
     var a = appts.filter(function (x) { return x.id === id; })[0];
     if (!a) return;
     askConfirm('Supprimer ce rendez-vous ?',
-      a.title + '<br>' + whenText(a),
+      a.title + '<br>' + apptWhen(a),
       function () {
         appts = appts.filter(function (x) { return x.id !== id; });
         persist();
@@ -442,7 +445,7 @@
     if (!a) return;
     noteId = id;
     noteOriginal = a.note || '';
-    $('noteFor').textContent = a.title + ' — ' + whenText(a);
+    $('noteFor').textContent = a.title + ' — ' + apptWhen(a);
     $('noteText').value = noteOriginal;
     $('noteDelete').classList.toggle('hidden', !noteOriginal);
     $('noteTitle').textContent = noteOriginal ? 'Note' : 'Ajouter une note';
@@ -600,6 +603,29 @@
   $('bkOpen').addEventListener('click', function () { $('bkFile').click(); });
   $('bkClose').addEventListener('click', function () { hideOverlay('backup'); });
   $('backupBtn').addEventListener('click', openBackup);
+  var manualSaving = false;
+  $('saveBtn').addEventListener('click', function () {
+    var btn = this;
+    if (btn.disabled) return;
+    keepCopy(load(), true); // copie de sécurité sur l'appareil
+    if (!cloud.isConnected()) {
+      toast('Copie gardée sur cet appareil. Pas connecté à la sauvegarde en ligne.');
+      openBackup();
+      return;
+    }
+    manualSaving = true;
+    btn.disabled = true;
+    btn.textContent = '⏳ Synchronisation…';
+    cloudMsg = '';
+    syncNow(true).then(function () {
+      manualSaving = false;
+      renderCloud();
+      var st = cloud.status();
+      if (st.errorCode === 'AUTH' || st.errorCode === 'DENIED') { toast('⚠️ ' + st.error); openBackup(); }
+      else if (st.error) toast('⚠️ Synchronisation impossible pour le moment. Copie gardée sur cet appareil.');
+      else toast('✓ Sauvegardé et synchronisé');
+    });
+  });
 
   // ---------- Sauvegarde en ligne ----------
   var syncing = false, syncAgain = false, syncTimer = null, lastFullSync = 0, cloudMsg = '';
@@ -656,7 +682,11 @@
   }
 
   function renderCloud() {
-    $('backupBtn').textContent = '💾 Sauvegarde' + (cloudProblem() ? ' ⚠️' : '');
+    if (!manualSaving) {
+      $('saveBtn').textContent = '💾 Sauvegarder' + (cloud.isConnected() && !cloudProblem() ? '' : ' ⚠️');
+      $('saveBtn').disabled = false;
+    }
+    $('backupBtn').textContent = '⚙️ Options de sauvegarde' + (cloudProblem() ? ' ⚠️' : '');
     if (!isOpen('backup')) return;
     var s = cloud.session(), st = cloud.status(), html, needLogin = !s;
     if (!s) {
@@ -739,38 +769,52 @@
   var rec = null, listening = false, recSession = 0;
 
   // h : { onStart(), onText(texte partiel), onDone(texte final), onError(code) }
+  // Le navigateur coupe le micro après 2 à 5 secondes de silence. Tant que rien n'a été entendu et que
+  // CONFIG.minListenMs n'est pas écoulé, on le rouvre sans rien dire : la personne a le temps de parler.
+  var userStop = false;
   function listen(h) {
     stopListening();
     stopSpeaking();
     if (!Rec) { h.onError('unsupported'); return; }
-    var session = ++recSession, heard = '', lastError = '';
-    try { rec = new Rec(); } catch (e) { h.onError('unsupported'); return; }
-    rec.lang = 'fr-FR';
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.maxAlternatives = 1;
-    rec.onstart = function () {
+    var session = ++recSession, heard = '', lastError = '', started = Date.now(), announced = false;
+    userStop = false;
+    function startOne() {
       if (session !== recSession) return;
-      listening = true;
-      h.onStart();
-    };
-    rec.onresult = function (e) {
-      if (session !== recSession) return;
-      var txt = '';
-      for (var i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-      heard = txt;
-      h.onText(txt);
-    };
-    rec.onerror = function (e) { lastError = e.error || ''; };
-    rec.onend = function () {
-      if (session !== recSession) return; // écoute annulée entre-temps
-      listening = false;
-      rec = null;
-      var t = heard.trim();
-      if (t) h.onDone(t);
-      else h.onError(lastError || 'no-speech');
-    };
-    try { rec.start(); } catch (e) { h.onError('start'); }
+      try { rec = new Rec(); } catch (e) { listening = false; h.onError('unsupported'); return; }
+      rec.lang = 'fr-FR';
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = function () {
+        if (session !== recSession) return;
+        listening = true;
+        if (!announced) { announced = true; h.onStart(); }
+      };
+      rec.onresult = function (e) {
+        if (session !== recSession) return;
+        var txt = '';
+        for (var i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+        heard = txt;
+        h.onText(txt);
+      };
+      rec.onerror = function (e) { lastError = e.error || ''; };
+      rec.onend = function () {
+        if (session !== recSession) return; // écoute annulée entre-temps
+        rec = null;
+        var t = heard.trim();
+        if (t) { listening = false; h.onDone(t); return; }
+        var silence = !lastError || lastError === 'no-speech' || lastError === 'aborted';
+        if (silence && !userStop && Date.now() - started < CONFIG.minListenMs) {
+          lastError = '';
+          setTimeout(startOne, 150); // on rouvre le micro
+          return;
+        }
+        listening = false;
+        h.onError(lastError || 'no-speech');
+      };
+      try { rec.start(); } catch (e) { listening = false; h.onError('start'); }
+    }
+    startOne();
   }
 
   // Arrête l'écoute et ignore ce qui a été entendu
@@ -778,12 +822,12 @@
     recSession++;
     if (rec) { try { rec.abort(); } catch (e) {} rec = null; }
     listening = false;
-    var mics = document.querySelectorAll('.mic');
+    var mics = document.querySelectorAll('.mic, .row-mic');
     for (var i = 0; i < mics.length; i++) mics[i].classList.remove('listening');
   }
 
   // Termine l'écoute en gardant ce qui a été entendu
-  function finishListening() { if (rec) { try { rec.stop(); } catch (e) {} } }
+  function finishListening() { userStop = true; if (rec) { try { rec.stop(); } catch (e) {} } }
 
   function micError(code, what) {
     if (code === 'not-allowed' || code === 'service-not-allowed') {
@@ -963,6 +1007,67 @@
   $('vRetry').addEventListener('click', function () { pending = null; hideOverlay('verify'); openVoice(voiceDate); });
   $('vCancel').addEventListener('click', function () { stopSpeaking(); pending = null; hideOverlay('verify'); });
 
+  // ---------- Redire une seule information (date, heure ou rendez-vous) ----------
+  var FIELD_WHAT = { date: 'la date', time: "l'heure", title: 'le rendez-vous' };
+  var FIELD_VAL = { date: 'vDate', time: 'vTime', title: 'vTitle' };
+
+  function redictField(field, btn) {
+    if (!pending) return;
+    if (listening) { finishListening(); return; }
+    var valEl = $(FIELD_VAL[field]);
+    listen({
+      onStart: function () { btn.classList.add('listening'); valEl.textContent = '🎤 Dites ' + FIELD_WHAT[field] + '…'; },
+      onText: function (t) { valEl.textContent = '« ' + t + ' »'; },
+      onDone: function (t) { btn.classList.remove('listening'); applyField(field, t); },
+      onError: function (code) {
+        btn.classList.remove('listening');
+        renderVerify();
+        toast(micError(code, FIELD_WHAT[field]));
+      }
+    });
+  }
+
+  function applyField(field, text) {
+    var now = new Date(), r, ok = true, said = '';
+    if (field === 'date') {
+      r = P.parse(text, now);
+      if (r.date) {
+        pending.date = r.date;
+        pending.endDate = r.endDate;
+        pending.warnings = r.warnings;
+        said = r.endDate ? P.formatRange(r.date, r.endDate) : P.formatDate(r.date);
+      } else ok = false;
+    } else if (field === 'time') {
+      r = P.parse(/\d$/.test(text.trim()) ? text + ' heures' : text, now);
+      if (r.time) { pending.time = r.time; said = P.spokenTime(r.time); }
+      else if (/pas d.?heure|sans heure|aucune heure/i.test(text)) { pending.time = null; said = 'sans heure'; }
+      else ok = false;
+    } else {
+      r = P.parse(text, now);
+      if (r.title && r.title !== 'Rendez-vous' || text.trim()) { pending.title = r.title || text.trim(); said = pending.title; }
+      else ok = false;
+    }
+    renderVerify();
+    if (!ok) {
+      toast("Je n'ai pas compris " + FIELD_WHAT[field] + '. Touchez le micro et réessayez.');
+      speak("Je n'ai pas compris " + FIELD_WHAT[field] + '.');
+      return;
+    }
+    if (!$('editBox').classList.contains('hidden')) {
+      $('eDate').value = pending.date || '';
+      $('eEndDate').value = pending.endDate || '';
+      $('eTime').value = pending.time || '';
+      $('eTitle').value = pending.title || '';
+    }
+    speak(said + '. Est-ce correct ?');
+  }
+
+  $('verify').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.row-mic') : null;
+    if (btn) redictField(btn.getAttribute('data-field'), btn);
+  });
+  if (!Rec) document.body.classList.add('no-mic');
+
   // ---------- Modifier un rendez-vous (même écran que la vérification, champs ouverts) ----------
   function openEdit(id) {
     var a = findAppt(id);
@@ -1038,19 +1143,19 @@
   });
 
   // ---------- Veille automatique ----------
-  var idleTimer = null;
-  function resetIdle() {
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(function () {
-      if (isOverlayOpen()) { resetIdle(); return; } // ne jamais perdre une saisie en cours
-      showLock();
-    }, CONFIG.lockAfterMs);
-  }
-  ['touchstart', 'mousedown', 'keydown', 'scroll'].forEach(function (ev) {
-    document.addEventListener(ev, function () {
-      if ($('lock').classList.contains('hidden')) resetIdle();
-    }, { passive: true });
+  // Vérifiée toutes les 5 secondes (plus fiable qu'un minuteur sur une tablette). Seuls les vrais gestes
+  // comptent : un défilement causé par une mise à jour de la liste ne doit pas empêcher la mise en veille.
+  var lastActivity = Date.now();
+  function resetIdle() { lastActivity = Date.now(); }
+  ['touchstart', 'pointerdown', 'mousedown', 'keydown', 'wheel'].forEach(function (ev) {
+    document.addEventListener(ev, resetIdle, { passive: true });
   });
+  function checkIdle() {
+    if (!$('lock').classList.contains('hidden') || listening) return;
+    var limit = isOverlayOpen() ? CONFIG.lockBusyMs : CONFIG.lockAfterMs;
+    if (Date.now() - lastActivity >= limit) showLock();
+  }
+  setInterval(checkIdle, 5000);
 
   $('lock').addEventListener('click', unlock);
   $('lockBtn').addEventListener('click', showLock);

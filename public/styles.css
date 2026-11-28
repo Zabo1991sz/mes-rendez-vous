@@ -61,10 +61,10 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- Liste ---------- */
 .main { max-width: 960px; margin: 0 auto; padding: 24px 16px 190px; }
-.top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
+.top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
 .top h1 { font-size: 2.2rem; margin: 0; }
 .today-label { font-size: 1.2rem; color: var(--muted); margin-top: 4px; }
-.top-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-left: 12px; }
+.top-actions { display: flex; flex-wrap: nowrap; justify-content: flex-end; margin-left: auto; padding-left: 12px; }
 .btn-top {
   font-size: 1rem; padding: 12px 18px; border-radius: 14px; margin: 0 0 8px 10px;
   border: 2px solid var(--border); background: #fff; color: var(--text); white-space: nowrap;
@@ -278,6 +278,16 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
 }
 .summary-row { display: flex; align-items: center; padding: 18px 0; border-bottom: 2px solid #F0EAE0; }
 .summary-row:last-child { border-bottom: none; }
+.summary-row .row-main { flex: 1; min-width: 0; }
+/* Micro pour redire une seule information */
+.row-mic {
+  width: 64px; height: 64px; border-radius: 50%; border: 2px solid #C9D7EE; background: #EEF3FB;
+  font-size: 1.7rem; flex-shrink: 0; margin-left: 12px; display: flex; align-items: center; justify-content: center;
+}
+.row-mic.listening { background: var(--red); border-color: var(--red); animation: ring 1.4s infinite; }
+.no-mic .row-mic { display: none; }
+.btn-save { font-weight: 700; border-color: #8CCBA3; color: #1D5E3A; }
+.btn-top:disabled { opacity: .6; }
 .summary-row .ico { font-size: 2.3rem; width: 70px; flex-shrink: 0; }
 .summary-row .lbl { font-size: .95rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .summary-row .val { font-size: 1.9rem; font-weight: 700; line-height: 1.25; word-wrap: break-word; }
@@ -414,8 +424,9 @@ textarea:focus, .edit input:focus { outline: none; border-color: var(--primary);
   .mic { width: 160px; height: 160px; }
   .top h1 { font-size: 1.9rem; }
   .top { flex-direction: column; }
-  .top-actions { margin: 12px 0 0; justify-content: flex-start; }
-  .btn-top { padding: 10px 12px; margin: 0 10px 0 0; }
+  .top-actions { margin: 12px 0 0; padding-left: 0; flex-wrap: wrap; justify-content: flex-start; }
+  .btn-top { padding: 10px 9px; margin: 0 6px 6px 0; font-size: .9rem; }
+  .btn-cal { font-size: 1rem; }
   .cal-nav { width: 60px; height: 60px; font-size: 1.5rem; }
   .cal-title { font-size: 1.5rem; }
   .cal-grid { grid-gap: 4px; gap: 4px; }

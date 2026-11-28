@@ -31,11 +31,12 @@
       </div>
       <div class="top-actions">
         <button class="btn-top btn-cal" id="calBtn" type="button">📅 Calendrier</button>
+        <button class="btn-top btn-save" id="saveBtn" type="button">💾 Sauvegarder</button>
         <button class="btn-top" id="lockBtn" type="button">🔒 Veille</button>
       </div>
     </header>
     <div id="list"></div>
-    <button class="link-backup" id="backupBtn" type="button">💾 Sauvegarde</button>
+    <button class="link-backup" id="backupBtn" type="button">⚙️ Options de sauvegarde</button>
     <button class="fab" id="addBtn" type="button" aria-label="Ajouter un rendez-vous">
       <span class="fab-plus">+</span>
       <span class="fab-label">Ajouter</span>
@@ -162,15 +163,18 @@
       <div class="summary">
         <div class="summary-row">
           <div class="ico">📅</div>
-          <div><div class="lbl">Date</div><div class="val" id="vDate"></div></div>
+          <div class="row-main"><div class="lbl">Date</div><div class="val" id="vDate"></div></div>
+          <button class="row-mic" type="button" data-field="date" aria-label="Redire la date">🎤</button>
         </div>
         <div class="summary-row">
           <div class="ico">🕙</div>
-          <div><div class="lbl">Heure</div><div class="val" id="vTime"></div></div>
+          <div class="row-main"><div class="lbl">Heure</div><div class="val" id="vTime"></div></div>
+          <button class="row-mic" type="button" data-field="time" aria-label="Redire l'heure">🎤</button>
         </div>
         <div class="summary-row">
           <div class="ico">📝</div>
-          <div><div class="lbl">Rendez-vous</div><div class="val" id="vTitle"></div></div>
+          <div class="row-main"><div class="lbl">Rendez-vous</div><div class="val" id="vTitle"></div></div>
+          <button class="row-mic" type="button" data-field="title" aria-label="Redire le rendez-vous">🎤</button>
         </div>
       </div>
       <div id="vWarnings"></div>
